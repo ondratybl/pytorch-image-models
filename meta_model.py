@@ -13,6 +13,13 @@ class MetaModel(torch.nn.Module):
         assert model1.num_classes == model2.num_classes, 'Incompatible models due to num_classes missmatch'
         self.num_classes = model1.num_classes
 
+        # Count number of trainable parameters
+        trainable_param_count = 0
+        for param in self.parameters():
+            if param.requires_grad:
+                trainable_param_count += param.numel()
+        print(f'Number of trainable parameters for the meta model: {trainable_param_count}')
+
     def forward(self, x):
         weights = softmax(self.weights, dim=-1)
         y = torch.add(torch.mul(self.model1(x), weights[0, 0]), torch.mul(self.model2(x), weights[0, 1]))

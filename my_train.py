@@ -373,6 +373,8 @@ group.add_argument('--output', default='', type=str, metavar='PATH',
                    help='path to output folder (default: none, current dir)')
 group.add_argument('--experiment', default='', type=str, metavar='NAME',
                    help='name of train experiment, name of sub-folder for output')
+group.add_argument('--wandb-name', default='', type=str, metavar='NAME',
+                   help='descriptive name of the wandb experiment')
 group.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_METRIC',
                    help='Best metric (default: "top1"')
 group.add_argument('--tta', type=int, default=0, metavar='N',
@@ -467,10 +469,18 @@ def main():
             num_classes=-1,  # force head adaptation
         )
 
-    # Create model
+    # Create models
     model1 = create_model(args.model1, pretrained=True, num_classes=args.num_classes)
     model2 = create_model(args.model2, pretrained=True, num_classes=args.num_classes)
 
+    # Freeze layers
+    for param in model1.parameters():
+        param.requires_grad = False
+
+    for param in model2.parameters():
+        param.requires_grad = False
+
+    # Create metamodel
     model = meta_model.MetaModel(model1, model2)
 
     if args.head_init_scale is not None:
@@ -801,7 +811,7 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
-            wandb.init(project=args.experiment, config=args)
+            wandb.init(project=args.experiment, config=args, name=args.wandb_name)
         else:
             _logger.warning(
                 "You've requested to log metrics to wandb but package not found. "
