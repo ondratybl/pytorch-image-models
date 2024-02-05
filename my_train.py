@@ -469,6 +469,9 @@ def main():
             num_classes=-1,  # force head adaptation
         )
 
+    # Set model.args (not sure about the consequences but is needed at least for saver below)
+    args.model = args.model1 + '_vs_' + args.model2
+
     # Create models
     model1 = create_model(args.model1, pretrained=True, num_classes=args.num_classes)
     model2 = create_model(args.model2, pretrained=True, num_classes=args.num_classes)
