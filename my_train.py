@@ -867,6 +867,8 @@ def main():
                 mixup_fn=mixup_fn,
             )
 
+            train_metrics['model1_weight'] = torch.nn.functional.softmax(torch.cat([model.logit, -model.logit], dim=1), dim=-1)[0, 0]
+
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if utils.is_primary(args):
                     _logger.info("Distributing BatchNorm running means and vars")
@@ -908,9 +910,6 @@ def main():
                     write_header=best_metric is None,
                     log_wandb=args.log_wandb and has_wandb,
                 )
-                # Log weight of the first model
-                if args.log_wandb and has_wandb:  # TODO: incorporate into update_summary
-                    wandb.log({'Model1 weight': torch.nn.functional.softmax(torch.cat([model.logit, -model.logit], dim=1), dim=-1)[0, 0]})
 
             if eval_metrics is not None:
                 latest_metric = eval_metrics[eval_metric]
