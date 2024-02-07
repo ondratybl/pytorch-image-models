@@ -4,9 +4,9 @@ import torch
 
 
 class MetaModel(torch.nn.Module):
-    def __init__(self, model1, model2):
+    def __init__(self, model1, model2, init_logit=0):
         super().__init__()
-        self.logit = torch.nn.Parameter(torch.rand(1, 1))
+        self.logit = torch.nn.Parameter(torch.tensor([[init_logit]]))
         self.model1 = model1
         self.model2 = model2
         assert model1.num_classes == model2.num_classes, 'Incompatible models due to num_classes missmatch'
