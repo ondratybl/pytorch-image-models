@@ -4,7 +4,7 @@ import torch
 
 
 class MetaModel(torch.nn.Module):
-    def __init__(self, model1, model2, init_logit=0):
+    def __init__(self, model1, model2, init_logit=0.0):
         super().__init__()
         self.logit = torch.nn.Parameter(torch.tensor([[init_logit]]))
         self.model1 = model1
