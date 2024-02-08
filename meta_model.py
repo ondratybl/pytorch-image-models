@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import torch
+from temperature_scaling import ModelWithTemperature
 
 
 class MetaModel(torch.nn.Module):
     def __init__(self, model1, model2, init_logit=0.0):
         super().__init__()
         self.logit = torch.nn.Parameter(torch.tensor([[init_logit]]))
-        self.model1 = model1
-        self.model2 = model2
+        self.model1 = ModelWithTemperature(model1)
+        self.model2 = ModelWithTemperature(model2)
         assert model1.num_classes == model2.num_classes, 'Incompatible models due to num_classes missmatch'
         self.num_classes = model1.num_classes
 
@@ -37,3 +38,10 @@ class MetaModel(torch.nn.Module):
 
     def string(self):
         return f'Weight for the first model: {torch.nn.functional.softmax(torch.cat([self.logit, -self.logit], dim=1), dim=-1)[0][0].item()}'
+
+    def set_temperatures(self, valid_loader):
+        self.model1.set_temperature(valid_loader)
+        self.model2.set_temperature(valid_loader)
+
+        print(f'Temperature for Model1 set to: {self.model1.temperature[0].item()}')
+        print(f'Temperature for Model2 set to: {self.model2.temperature[0].item()}')

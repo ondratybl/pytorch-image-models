@@ -115,6 +115,8 @@ group.add_argument('--model1', default='resnet50', type=str, metavar='MODEL',
                    help='Name of model 1 to be compared (default: "resnet50")')
 group.add_argument('--model2', default='resnet50', type=str, metavar='MODEL',
                    help='Name of model 2 to be compared (default: "resnet50")')
+group.add_argument('--scale-temperature', action='store_true', default=False,
+                   help='if true we apply optimal temperature scale to fit probabilities')
 group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
 group.add_argument('--pretrained-path', default=None, type=str,
@@ -842,6 +844,9 @@ def main():
     if utils.is_primary(args):
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
+
+    if args.scale_temperature:
+        model.set_temperatures(loader_eval)  # TODO: do I change the order of images in training by using the loader here?
 
     results = []
     try:
