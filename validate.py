@@ -209,10 +209,11 @@ def validate(args):
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         in_chans=in_chans,
-        global_pool=args.gp,
-        scriptable=args.torchscript,
-        **args.model_kwargs,
+        #global_pool=args.gp,
+        #scriptable=args.torchscript,
+        #**args.model_kwargs,
     )
+
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes

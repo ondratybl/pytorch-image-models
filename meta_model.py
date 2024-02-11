@@ -37,7 +37,7 @@ class MetaModel(torch.nn.Module):
         return torch.nn.functional.softmax(y, dim=-1)
 
     def string(self):
-        return f'Weight for the first model: {torch.nn.functional.softmax(torch.cat([self.logit, -self.logit], dim=1), dim=-1)[0][0].item()}'
+        return f'Logit for the first model: {self.logit}'
 
     def set_temperatures(self, valid_loader):
         self.model1.set_temperature(valid_loader)
