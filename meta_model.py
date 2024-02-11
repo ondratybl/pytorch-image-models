@@ -8,8 +8,8 @@ class MetaModel(torch.nn.Module):
     def __init__(self, model1, model2, init_logit=0.0):
         super().__init__()
         self.logit = torch.nn.Parameter(torch.tensor([[init_logit]]))
-        self.model1 = ModelWithTemperature(model1)
-        self.model2 = ModelWithTemperature(model2)
+        self.model1 = model1 #ModelWithTemperature(model1)
+        self.model2 = model2 #ModelWithTemperature(model2)
         assert model1.num_classes == model2.num_classes, 'Incompatible models due to num_classes missmatch'
         self.num_classes = model1.num_classes
 
