@@ -32,9 +32,13 @@ class MetaModel(torch.nn.Module):
         model2_logits_std = model2_logits - torch.mean(model2_logits, dim=1, keepdim=True).repeat(1, self.num_classes)
 
         # Combined output
-        y = torch.add(torch.mul(model1_logits_std, weights[0, 0]), torch.mul(model2_logits_std, weights[0, 1]))
+        #y = torch.add(torch.mul(model1_logits_std, weights[0, 0]), torch.mul(model2_logits_std, weights[0, 1]))
 
-        return torch.nn.functional.softmax(y, dim=-1)
+        #return torch.nn.functional.softmax(y, dim=-1)
+
+        model1_output = torch.nn.functional.softmax(model1_logits_std, dim=-1)
+        model2_output = torch.nn.functional.softmax(model2_logits_std, dim=-1)
+        return torch.add(torch.mul(model1_output, weights[0, 0]), torch.mul(model2_output, weights[0, 1]))
 
     def string(self):
         return f'Logit for the first model: {self.logit}'
