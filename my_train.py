@@ -1073,7 +1073,6 @@ def train_one_epoch(
             lr = sum(lrl) / len(lrl)
 
             if args.distributed:
-                print('Distributed computation')
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
                 reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)  # TODO: check if correct
                 losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
