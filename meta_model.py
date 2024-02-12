@@ -13,13 +13,6 @@ class MetaModel(torch.nn.Module):
         assert model1.num_classes == model2.num_classes, 'Incompatible models due to num_classes missmatch'
         self.num_classes = model1.num_classes
 
-        # Count number of trainable parameters
-        trainable_param_count = 0
-        for param in self.parameters():
-            if param.requires_grad:
-                trainable_param_count += param.numel()
-        print(f'Number of trainable parameters for the meta model: {trainable_param_count}')
-
     def forward(self, x):
 
         # Weights for the two models
@@ -41,7 +34,14 @@ class MetaModel(torch.nn.Module):
         #return torch.add(torch.mul(model1_output, weights[0, 0]), torch.mul(model2_output, weights[0, 1]))
 
     def string(self):
-        return f'Logit for the first model: {self.logit}'
+        return f'Logit for the first model: {self.logit[0].item()}, number of trainable params: {self.get_trainable_param_count()}.'
+
+    def get_trainable_param_count(self):
+        trainable_param_count = 0
+        for param in self.parameters():
+            if param.requires_grad:
+                trainable_param_count += param.numel()
+        return trainable_param_count
 
     def set_temperatures(self, valid_loader):
         self.model1.set_temperature(valid_loader)

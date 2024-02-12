@@ -854,7 +854,7 @@ def main():
     try:
         for epoch in range(start_epoch, num_epochs):
 
-            print(model.string() + ' before epoch.')
+            print(model.string() + f' Before epoch {epoch}.')
 
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
