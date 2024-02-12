@@ -31,6 +31,7 @@ import yaml
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 import meta_model
+import timm.utils
 from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
@@ -111,10 +112,14 @@ group.add_argument('--target-key', default=None, type=str,
 
 # Model parameters
 group = parser.add_argument_group('Model parameters')
-group.add_argument('--model1', default='resnet50', type=str, metavar='MODEL',
+group.add_argument('--model1', default='resnet50', type=str, metavar='MODEL1',
                    help='Name of model 1 to be compared (default: "resnet50")')
-group.add_argument('--model2', default='resnet50', type=str, metavar='MODEL',
+group.add_argument('--model2', default='resnet50', type=str, metavar='MODEL2',
                    help='Name of model 2 to be compared (default: "resnet50")')
+group.add_argument('--scale-temperature', action='store_true', default=False,
+                   help='if true we apply optimal temperature scale to fit probabilities')
+group.add_argument('--logit-init', type=float, default=0.0, metavar='LOGIT',
+                   help='initial logit for model 1 weight')
 group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
 group.add_argument('--pretrained-path', default=None, type=str,
@@ -484,7 +489,7 @@ def main():
         param.requires_grad = False
 
     # Create metamodel
-    model = meta_model.MetaModel(model1, model2)
+    model = meta_model.MetaModel(model1, model2, args.logit_init)
 
     if args.head_init_scale is not None:
         with torch.no_grad():
@@ -843,36 +848,19 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
+    if args.scale_temperature:
+        model.set_temperatures(loader_eval)  # TODO: do I change the order of images in training by using the loader here?
+
     results = []
     try:
         for epoch in range(start_epoch, num_epochs):
+
+            print(model.string() + f' Before epoch {epoch}.')
+
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
-
-            train_metrics = train_one_epoch(
-                epoch,
-                model,
-                loader_train,
-                optimizer,
-                train_loss_fn,
-                args,
-                lr_scheduler=lr_scheduler,
-                saver=saver,
-                output_dir=output_dir,
-                amp_autocast=amp_autocast,
-                loss_scaler=loss_scaler,
-                model_ema=model_ema,
-                mixup_fn=mixup_fn,
-            )
-
-            train_metrics['model1_weight'] = torch.nn.functional.softmax(torch.cat([model.logit, -model.logit], dim=1), dim=-1)[0, 0]
-
-            if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
-                if utils.is_primary(args):
-                    _logger.info("Distributing BatchNorm running means and vars")
-                utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
             if loader_eval is not None:
                 eval_metrics = validate(
@@ -898,6 +886,29 @@ def main():
                     eval_metrics = ema_eval_metrics
             else:
                 eval_metrics = None
+
+            train_metrics = train_one_epoch(
+                epoch,
+                model,
+                loader_train,
+                optimizer,
+                train_loss_fn,
+                args,
+                lr_scheduler=lr_scheduler,
+                saver=saver,
+                output_dir=output_dir,
+                amp_autocast=amp_autocast,
+                loss_scaler=loss_scaler,
+                model_ema=model_ema,
+                mixup_fn=mixup_fn,
+            )
+
+            train_metrics['model1_weight'] = torch.nn.functional.softmax(torch.cat([model.logit, -model.logit], dim=1), dim=-1)[0, 0]
+
+            if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
+                if utils.is_primary(args):
+                    _logger.info("Distributing BatchNorm running means and vars")
+                utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
             if output_dir is not None:
                 lrs = [param_group['lr'] for param_group in optimizer.param_groups]
@@ -967,6 +978,7 @@ def train_one_epoch(
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
+    accuracies_m = utils.AverageMeter()
 
     model.train()
 
@@ -1001,9 +1013,10 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 loss = loss_fn(output, target)
+                accuracy = timm.utils.accuracy(output.detach(), target)
             if accum_steps > 1:
                 loss /= accum_steps
-            return loss
+            return loss, accuracy
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1029,14 +1042,15 @@ def train_one_epoch(
 
         if has_no_sync and not need_update:
             with model.no_sync():
-                loss = _forward()
+                loss, accuracy = _forward()
                 _backward(loss)
         else:
-            loss = _forward()
+            loss, accuracy = _forward()
             _backward(loss)
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy[0].item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
@@ -1060,7 +1074,9 @@ def train_one_epoch(
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
+                reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)  # TODO: check if correct
                 losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
+                accuracies_m.update(reduced_accuracy.item() * accum_steps, input.size(0))
                 update_sample_count *= args.world_size
 
             if utils.is_primary(args):
@@ -1068,6 +1084,8 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
+                    f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
+                    f'Model 1 logit: {model.logit[0].item():#.3g}  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
@@ -1161,9 +1179,9 @@ def validate(
                 _logger.info(
                     f'{log_name}: [{batch_idx:>4d}/{last_idx}]  '
                     f'Time: {batch_time_m.val:.3f} ({batch_time_m.avg:.3f})  '
-                    f'Loss: {losses_m.val:>7.3f} ({losses_m.avg:>6.3f})  '
-                    f'Acc@1: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
-                    f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
+                    f'Loss before epoch: {losses_m.val:>7.3f} ({losses_m.avg:>6.3f})  '
+                    f'Acc@1 before epoch: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
+                    f'Acc@5 before epoch: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
                 )
 
     metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
