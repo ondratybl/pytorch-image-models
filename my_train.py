@@ -116,6 +116,8 @@ group.add_argument('--model1', default='resnet50', type=str, metavar='MODEL1',
                    help='Name of model 1 to be compared (default: "resnet50")')
 group.add_argument('--model2', default='resnet50', type=str, metavar='MODEL2',
                    help='Name of model 2 to be compared (default: "resnet50")')
+group.add_argument('--temperature', default=1.0, type=float, metavar='TEMPERATURE',
+                   help='Temperature of model 1 and model 2, shall be overriden if --scale-temperature')
 group.add_argument('--scale-temperature', action='store_true', default=False,
                    help='if true we apply optimal temperature scale to fit probabilities')
 group.add_argument('--logit-init', type=float, default=0.0, metavar='LOGIT',
@@ -489,7 +491,7 @@ def main():
         param.requires_grad = False
 
     # Create metamodel
-    model = meta_model.MetaModel(model1, model2, args.logit_init)
+    model = meta_model.MetaModel(model1, model2, args.temperature, args.logit_init)
 
     if args.head_init_scale is not None:
         with torch.no_grad():
