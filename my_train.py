@@ -849,7 +849,7 @@ def main():
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
     if args.scale_temperature:
-        model.set_temperatures(loader_eval)  # TODO: do I change the order of images in training by using the loader here?
+        model.set_and_freeze_temperatures(loader_eval)  # TODO: do I change the order of images in training by using the loader here?
 
     results = []
     try:
