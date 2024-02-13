@@ -489,7 +489,7 @@ def main():
         param.requires_grad = False
 
     # Create metamodel
-    model = meta_model.MetaModel(model1, model2, args.logit_init)
+    model = meta_model.MetaModel(model1, model2)
 
     if args.head_init_scale is not None:
         with torch.no_grad():
