@@ -1078,7 +1078,7 @@ def train_one_epoch(
                 update_sample_count *= args.world_size
 
             if args.log_wandb:
-                wandb.log({'Batch': epoch*1000000+batch_idx, 'Logit': model.logit[0].item()})
+                wandb.log({'Batch': epoch*1000000+batch_idx, 'Param1': model.param[0, 0].item(), 'Param2': model.param[0, 1].item()})
 
             if utils.is_primary(args):
                 _logger.info(
@@ -1086,7 +1086,6 @@ def train_one_epoch(
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
                     f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
-                    f'Logit: {model.logit[0].item():#.3g}  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
