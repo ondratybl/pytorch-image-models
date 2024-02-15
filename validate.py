@@ -369,13 +369,14 @@ def validate(args):
 
     if real_labels is not None:
         # real labels mode replaces topk values at the end
-        top1a, top5a = real_labels.get_accuracy(k=1), real_labels.get_accuracy(k=5)
+        top1a, top5a, lossa = real_labels.get_accuracy(k=1), real_labels.get_accuracy(k=5), -1.0
     else:
-        top1a, top5a = top1.avg, top5.avg
+        top1a, top5a, lossa = top1.avg, top5.avg, losses.avg
     results = OrderedDict(
         model=args.model,
         top1=round(top1a, 4), top1_err=round(100 - top1a, 4),
         top5=round(top5a, 4), top5_err=round(100 - top5a, 4),
+        loss=round(lossa, 4),
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
         crop_pct=crop_pct,
