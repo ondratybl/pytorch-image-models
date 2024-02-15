@@ -979,6 +979,8 @@ def train_one_epoch(
     accuracies_m = utils.AverageMeter()
 
     model.train()
+    model.model1.train(False)
+    model.model2.train(False)
 
     accum_steps = args.grad_accum_steps
     last_accum_steps = len(loader) % accum_steps
