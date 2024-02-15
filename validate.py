@@ -312,7 +312,7 @@ def validate(args):
     top1 = AverageMeter()
     top5 = AverageMeter()
 
-    model.train() # TODO change back to eval
+    model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
         input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device)
