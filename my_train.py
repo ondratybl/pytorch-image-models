@@ -116,8 +116,6 @@ group.add_argument('--model1', default='resnet50', type=str, metavar='MODEL1',
                    help='Name of model 1 to be compared (default: "resnet50")')
 group.add_argument('--model2', default='resnet50', type=str, metavar='MODEL2',
                    help='Name of model 2 to be compared (default: "resnet50")')
-group.add_argument('--scale-temperature', action='store_true', default=False,
-                   help='if true we apply optimal temperature scale to fit probabilities')
 group.add_argument('--logit-init', type=float, default=0.0, metavar='LOGIT',
                    help='initial logit for model 1 weight')
 group.add_argument('--pretrained', action='store_true', default=False,
@@ -478,8 +476,13 @@ def main():
     args.model = args.model1 + '_vs_' + args.model2
 
     # Create models
-    model1 = create_model(args.model1, pretrained=True, num_classes=args.num_classes)
-    model2 = create_model(args.model2, pretrained=True, num_classes=args.num_classes)
+    temp = torch.rand(args.batch_size, 3, 224, 224)
+    model1 = torch.jit.trace(
+        create_model(args.model1, pretrained=True, num_classes=args.num_classes), temp
+    )
+    model2 = torch.jit.trace(
+        create_model(args.model2, pretrained=True, num_classes=args.num_classes), temp
+    )
 
     # Freeze layers
     for param in model1.parameters():
@@ -489,7 +492,7 @@ def main():
         param.requires_grad = False
 
     # Create metamodel
-    model = meta_model.MetaModel(model1, model2, args.logit_init)
+    model = meta_model.MetaModel(model1, model2, args.num_classes, args.logit_init)
 
     if args.head_init_scale is not None:
         with torch.no_grad():
@@ -848,9 +851,6 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
-    if args.scale_temperature:
-        model.set_temperatures(loader_eval)  # TODO: do I change the order of images in training by using the loader here?
-
     results = []
     try:
         for epoch in range(start_epoch, num_epochs):
@@ -978,9 +978,7 @@ def train_one_epoch(
     losses_m = utils.AverageMeter()
     accuracies_m = utils.AverageMeter()
 
-    model.train()
-    model.model1.train(False)
-    model.model2.train(False)
+    model.eval() # TODO: make sure we want this
 
     accum_steps = args.grad_accum_steps
     last_accum_steps = len(loader) % accum_steps
