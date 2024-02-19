@@ -971,6 +971,7 @@ def train_one_epoch(
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
+    entropy_m = utils.AverageMeter()
     accuracies_m = utils.AverageMeter()
 
     model.train()
@@ -1005,11 +1006,14 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
                 output = model(input)
-                loss = loss_fn(output, target)
+                loss = -torch.sum(torch.sqrt(
+                    1.e-8+torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
+                ))
+                entropy = loss_fn(output, target)
                 accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
                 loss /= accum_steps
-            return loss, accuracy
+            return loss, entropy, accuracy
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1035,15 +1039,16 @@ def train_one_epoch(
 
         if has_no_sync and not need_update:
             with model.no_sync():
-                loss, accuracy = _forward()
+                loss, entropy, accuracy = _forward()
                 _backward(loss)
         else:
-            loss, accuracy = _forward()
+            loss, entropy, accuracy = _forward()
             _backward(loss)
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
-            accuracies_m.update(accuracy.item() * accum_steps, input.size(0))
+            entropy_m.update(entropy.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy[0].item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
@@ -1067,8 +1072,10 @@ def train_one_epoch(
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
+                reduced_entropy = utils.reduce_tensor(entropy.data, args.world_size)
                 reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)
                 losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
+                entropy_m.update(reduced_entropy.item() * accum_steps, input.size(0))
                 accuracies_m.update(reduced_accuracy.item() * accum_steps, input.size(0))
                 update_sample_count *= args.world_size
 
@@ -1077,6 +1084,7 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
+                    f'Entropy: {entropy_m.val:#.3g} ({entropy_m.avg:#.3g})  '
                     f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '

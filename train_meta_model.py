@@ -1082,7 +1082,7 @@ def train_one_epoch(
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
-            accuracies_m.update(accuracy.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy[0].item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
