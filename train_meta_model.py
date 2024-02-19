@@ -1077,11 +1077,12 @@ def train_one_epoch(
                 loss, accuracy = _forward()
                 _backward(loss)
         else:
-            loss = _forward()
+            loss, accuracy = _forward()
             _backward(loss)
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy.item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:

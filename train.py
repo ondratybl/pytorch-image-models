@@ -971,6 +971,7 @@ def train_one_epoch(
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
+    accuracies_m = utils.AverageMeter()
 
     model.train()
 
@@ -1005,9 +1006,10 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 loss = loss_fn(output, target)
+                accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
                 loss /= accum_steps
-            return loss
+            return loss, accuracy
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1033,14 +1035,15 @@ def train_one_epoch(
 
         if has_no_sync and not need_update:
             with model.no_sync():
-                loss = _forward()
+                loss, accuracy = _forward()
                 _backward(loss)
         else:
-            loss = _forward()
+            loss, accuracy = _forward()
             _backward(loss)
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy.item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
@@ -1064,7 +1067,9 @@ def train_one_epoch(
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
+                reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)
                 losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
+                accuracies_m.update(reduced_accuracy.item() * accum_steps, input.size(0))
                 update_sample_count *= args.world_size
 
             if utils.is_primary(args):
@@ -1072,6 +1077,7 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
+                    f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
