@@ -5,12 +5,22 @@ from temperature_scaling import ModelWithTemperature
 
 
 class MetaModel(torch.nn.Module):
-    def __init__(self, model1, model2, num_classes, init_logit=0.0):
+    def __init__(self, model1, model2, num_classes, pretrained, init_logit=0.0):
         super().__init__()
         self.logit = torch.nn.Parameter(torch.tensor([[init_logit]]))
         self.model1 = model1
         self.model2 = model2
         self.num_classes = num_classes
+
+        if pretrained:
+            # Freeze layers
+            for param in model1.parameters():
+                param.requires_grad = False
+
+            for param in model2.parameters():
+                param.requires_grad = False
+
+        print(self.string())
 
     def forward(self, x):
 
@@ -20,8 +30,8 @@ class MetaModel(torch.nn.Module):
         # Standardized logits of the two models
         model1_logits = self.model1(x)
         model2_logits = self.model2(x)
-        model1_logits_std = model1_logits #- torch.mean(model1_logits, dim=1, keepdim=True).repeat(1, self.num_classes)
-        model2_logits_std = model2_logits #- torch.mean(model2_logits, dim=1, keepdim=True).repeat(1, self.num_classes)
+        model1_logits_std = model1_logits - torch.mean(model1_logits, dim=1, keepdim=True).repeat(1, self.num_classes)
+        model2_logits_std = model2_logits - torch.mean(model2_logits, dim=1, keepdim=True).repeat(1, self.num_classes)
 
         # Combined output
         y = torch.add(torch.mul(model1_logits_std, weights[0, 0]), torch.mul(model2_logits_std, weights[0, 1]))
