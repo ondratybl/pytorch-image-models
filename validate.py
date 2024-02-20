@@ -309,6 +309,7 @@ def validate(args):
 
     batch_time = AverageMeter()
     losses = AverageMeter()
+    entropies = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
 
@@ -336,6 +337,7 @@ def validate(args):
                 if valid_labels is not None:
                     output = output[:, valid_labels]
                 loss = criterion(output, target)
+                entropy = criterion(output, output)
 
             if real_labels is not None:
                 real_labels.add_result(output)
@@ -343,6 +345,7 @@ def validate(args):
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output.detach(), target, topk=(1, 5))
             losses.update(loss.item(), input.size(0))
+            entropies.update(entropy.item(), input.size(0))
             top1.update(acc1.item(), input.size(0))
             top5.update(acc5.item(), input.size(0))
 
@@ -355,12 +358,14 @@ def validate(args):
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
+                    'Entropy:  {entropy.val:>7.4f} ({entropy.avg:>6.4f})  '
                     'Acc@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
                     'Acc@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
                         batch_idx,
                         len(loader),
                         batch_time=batch_time,
                         rate_avg=input.size(0) / batch_time.avg,
+                        entropy=entropies,
                         loss=losses,
                         top1=top1,
                         top5=top5
@@ -369,14 +374,15 @@ def validate(args):
 
     if real_labels is not None:
         # real labels mode replaces topk values at the end
-        top1a, top5a, lossa = real_labels.get_accuracy(k=1), real_labels.get_accuracy(k=5), -1.0
+        top1a, top5a, lossa, entropya = real_labels.get_accuracy(k=1), real_labels.get_accuracy(k=5), -1.0, -1.0
     else:
-        top1a, top5a, lossa = top1.avg, top5.avg, losses.avg
+        top1a, top5a, lossa, entropya = top1.avg, top5.avg, losses.avg, entropies.avg
     results = OrderedDict(
         model=args.model,
         top1=round(top1a, 4), top1_err=round(100 - top1a, 4),
         top5=round(top5a, 4), top5_err=round(100 - top5a, 4),
         loss=round(lossa, 4),
+        entropy=round(entropya, 4),
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
         crop_pct=crop_pct,
