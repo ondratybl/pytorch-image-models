@@ -1008,8 +1008,9 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
                 output = model(input)
+                print(target)
                 loss = -torch.sum(torch.sqrt(
-                    1.e-8+torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
+                    1.e-4+torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
                 ))
                 entropy = loss_fn(output, target)
                 accuracy = utils.accuracy(output.detach(), target)
