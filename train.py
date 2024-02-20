@@ -1090,7 +1090,7 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
-                    f'Entropy: {entropy_m.val:#.3g} ({entropy_m.avg:#.3g})  '
+                    f'Entropy: {entropy_m.val:#.3f} ({entropy_m.avg:#.3f})  '
                     f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
