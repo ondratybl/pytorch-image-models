@@ -44,6 +44,7 @@ try:
     from apex import amp
     from apex.parallel import DistributedDataParallel as ApexDDP
     from apex.parallel import convert_syncbn_model
+
     has_apex = True
 except ImportError:
     has_apex = False
@@ -57,18 +58,19 @@ except AttributeError:
 
 try:
     import wandb
+
     has_wandb = True
 except ImportError:
     has_wandb = False
 
 try:
     from functorch.compile import memory_efficient_fusion
+
     has_functorch = True
 except ImportError as e:
     has_functorch = False
 
 has_compile = hasattr(torch, 'compile')
-
 
 _logger = logging.getLogger('train')
 
@@ -77,7 +79,6 @@ _logger = logging.getLogger('train')
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
 parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                     help='YAML config file specifying default arguments')
-
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
@@ -172,7 +173,7 @@ scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None
 # Device & distributed
 group = parser.add_argument_group('Device parameters')
 group.add_argument('--device', default='cuda', type=str,
-                    help="Device (accelerator) to use.")
+                   help="Device (accelerator) to use.")
 group.add_argument('--amp', action='store_true', default=False,
                    help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
 group.add_argument('--amp-dtype', default='float16', type=str,
@@ -1008,10 +1009,12 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
                 output = model(input)
-                print(target)
-                loss = -torch.sum(torch.sqrt(
-                    1.e-4+torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
-                ))
+                if target.dim() == 1:  # Label encoding
+                    loss = -torch.sum(torch.sqrt(
+                        1.e-4 + torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
+                    ))
+                else:  # One-hot-encoding
+                    loss = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
                 entropy = loss_fn(output, target)
                 accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
