@@ -1045,7 +1045,7 @@ def train_one_epoch(
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))
-            accuracies_m.update(accuracy.item() * accum_steps, input.size(0))
+            accuracies_m.update(accuracy[0].item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
@@ -1069,7 +1069,7 @@ def train_one_epoch(
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
-                reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)
+                reduced_accuracy = utils.reduce_tensor(accuracy[0].data, args.world_size)
                 losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
                 accuracies_m.update(reduced_accuracy.item() * accum_steps, input.size(0))
                 update_sample_count *= args.world_size
