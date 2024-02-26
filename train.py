@@ -114,6 +114,8 @@ group.add_argument('--target-key', default=None, type=str,
 group = parser.add_argument_group('Model parameters')
 group.add_argument('--model', default='resnet50', type=str, metavar='MODEL',
                    help='Name of model to train (default: "resnet50")')
+group.add_argument('--loss', default='cross-entropy', type=str, metavar='LOSS',
+                   help='Loss to be minimized (cross-entropy, hellinger)')
 group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
 group.add_argument('--pretrained-path', default=None, type=str,
@@ -973,9 +975,10 @@ def train_one_epoch(
     has_no_sync = hasattr(model, "no_sync")
     update_time_m = utils.AverageMeter()
     data_time_m = utils.AverageMeter()
-    losses_m = utils.AverageMeter()
+    hellinger_m = utils.AverageMeter()
+    cross_entropy_m = utils.AverageMeter()
     entropy_m = utils.AverageMeter()
-    accuracies_m = utils.AverageMeter()
+    accuracy_m = utils.AverageMeter()
 
     model.train()
 
@@ -1008,18 +1011,30 @@ def train_one_epoch(
 
         def _forward():
             with amp_autocast():
+
+                # Model output
                 output = model(input)
+
+                # Hellinger
                 if target.dim() == 1:  # Label encoding
-                    loss = -torch.sum(torch.sqrt(
+                    hellinger = -torch.sum(torch.sqrt(
                         1.e-4 + torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
                     ))
                 else:  # One-hot-encoding
-                    loss = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
-                entropy = loss_fn(output, target)
+                    hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
+
+                # Cross entropy
+                cross_entropy = loss_fn(output, target)
+                entropy = nn.CrossEntropyLoss()(output, torch.softmax(output, dim=1))
+
+                # Accuracy
                 accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
-                loss /= accum_steps
-            return loss, entropy, accuracy
+                hellinger /= accum_steps
+                cross_entropy /= accum_steps
+                entropy /= accum_steps
+                accuracy /= accum_steps
+            return hellinger, cross_entropy, entropy, accuracy
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1045,16 +1060,23 @@ def train_one_epoch(
 
         if has_no_sync and not need_update:
             with model.no_sync():
-                loss, entropy, accuracy = _forward()
-                _backward(loss)
+                hellinger, cross_entropy, entropy, accuracy = _forward()
+                if args.loss == 'cross-entropy':
+                    _backward(cross_entropy)
+                else:
+                    _backward(hellinger)
         else:
-            loss, entropy, accuracy = _forward()
-            _backward(loss)
+            hellinger, cross_entropy, entropy, accuracy = _forward()
+            if args.loss == 'cross-entropy':
+                _backward(cross_entropy)
+            else:
+                _backward(hellinger)
 
         if not args.distributed:
-            losses_m.update(loss.item() * accum_steps, input.size(0))
+            hellinger_m.update(hellinger.item() * accum_steps, input.size(0))
+            cross_entropy_m.update(cross_entropy.item() * accum_steps, input.size(0))
             entropy_m.update(entropy.item() * accum_steps, input.size(0))
-            accuracies_m.update(accuracy[0].item() * accum_steps, input.size(0))
+            accuracy_m.update(accuracy[0].item() * accum_steps, input.size(0))
         update_sample_count += input.size(0)
 
         if not need_update:
@@ -1076,26 +1098,37 @@ def train_one_epoch(
             lrl = [param_group['lr'] for param_group in optimizer.param_groups]
             lr = sum(lrl) / len(lrl)
 
-            if args.distributed:
-                reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
-                reduced_entropy = utils.reduce_tensor(entropy.data, args.world_size)
-                reduced_accuracy = utils.reduce_tensor(accuracy.data, args.world_size)
-                losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
-                entropy_m.update(reduced_entropy.item() * accum_steps, input.size(0))
-                accuracies_m.update(reduced_accuracy.item() * accum_steps, input.size(0))
+            if args.distributed:  # TODO: test under distributed scenario
+                hellinger_m.update(
+                    utils.reduce_tensor(hellinger.data, args.world_size) * accum_steps, input.size(0)
+                )
+                cross_entropy_m.update(
+                    utils.reduce_tensor(cross_entropy.data, args.world_size) * accum_steps, input.size(0)
+                )
+                entropy_m.update(
+                    utils.reduce_tensor(entropy.data, args.world_size) * accum_steps, input.size(0)
+                )
+                accuracy_m.update(
+                    utils.reduce_tensor(accuracy[0].data, args.world_size) * accum_steps, input.size(0)
+                )
                 update_sample_count *= args.world_size
+
+            if args.loss == 'hellinger':
+                loss_val = hellinger_m.val
+                loss_avg = hellinger_m.avg
+            else:
+                loss_val = cross_entropy_m.val
+                loss_avg = cross_entropy_m.avg
 
             if utils.is_primary(args):
                 _logger.info(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
-                    f'Loss: {losses_m.val:#.3f} ({losses_m.avg:#.3f})  '
-                    f'Entropy: {entropy_m.val:#.3f} ({entropy_m.avg:#.3f})  '
-                    f'Acc@1: {accuracies_m.val:.3f} ({accuracies_m.avg:.3f})  '
-                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
-                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
-                    f'LR: {lr:.3e}  '
-                    f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
+                    f'Loss: {loss_val:#.3f} ({loss_avg:#.3f})  '
+                    f'Hell:  {hellinger_m.val:#.3f} ({hellinger_m.avg:#.3f})  '
+                    f'Cross:  {cross_entropy_m.val:#.3f} ({cross_entropy_m.avg:#.3f})  '
+                    f'Ent:  {entropy_m.val:#.3f} ({entropy_m.avg:#.3f})  '
+                    f'Acc: {accuracy_m.val:.3f} ({accuracy_m.avg:.3f})'
                 )
 
                 if args.save_images and output_dir:
@@ -1111,7 +1144,7 @@ def train_one_epoch(
             saver.save_recovery(epoch, batch_idx=update_idx)
 
         if lr_scheduler is not None:
-            lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
+            lr_scheduler.step_update(num_updates=num_updates, metric=loss_avg)
 
         update_sample_count = 0
         data_start_time = time.time()
@@ -1120,7 +1153,7 @@ def train_one_epoch(
     if hasattr(optimizer, 'sync_lookahead'):
         optimizer.sync_lookahead()
 
-    return OrderedDict([('loss', losses_m.avg)])
+    return OrderedDict([('loss', loss_avg), ('hell', hellinger_m.avg), ('cross', cross_entropy_m.avg), ('ent', entropy_m.avg), ('acc', accuracy_m.avg)])
 
 
 def validate(
