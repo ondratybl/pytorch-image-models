@@ -1064,7 +1064,7 @@ def train_one_epoch(
                 if args.loss == 'hellinger':
                     _backward(hellinger)
                 elif args.loss == 'cross-2-entropy':
-                    _backward(cross_entropy - 0.1*entropy)
+                    _backward(cross_entropy + 0.1*entropy)
                 else:
                     _backward(cross_entropy)
         else:
@@ -1072,7 +1072,7 @@ def train_one_epoch(
             if args.loss == 'hellinger':
                 _backward(hellinger)
             elif args.loss == 'cross-2-entropy':
-                _backward(cross_entropy - 0.1*entropy)
+                _backward(cross_entropy + 0.1*entropy)
             else:
                 _backward(cross_entropy)
 
