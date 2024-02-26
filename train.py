@@ -115,7 +115,7 @@ group = parser.add_argument_group('Model parameters')
 group.add_argument('--model', default='resnet50', type=str, metavar='MODEL',
                    help='Name of model to train (default: "resnet50")')
 group.add_argument('--loss', default='cross-entropy', type=str, metavar='LOSS',
-                   help='Loss to be minimized (cross-entropy, hellinger)')
+                   help='Loss to be minimized (cross-entropy, hellinger, cross-2-entropy)')
 group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
 group.add_argument('--pretrained-path', default=None, type=str,
@@ -1061,16 +1061,20 @@ def train_one_epoch(
         if has_no_sync and not need_update:
             with model.no_sync():
                 hellinger, cross_entropy, entropy, accuracy = _forward()
-                if args.loss == 'cross-entropy':
-                    _backward(cross_entropy)
-                else:
+                if args.loss == 'hellinger':
                     _backward(hellinger)
+                elif args.loss == 'cross-2-entropy':
+                    _backward(cross_entropy - 0.1*entropy)
+                else:
+                    _backward(cross_entropy)
         else:
             hellinger, cross_entropy, entropy, accuracy = _forward()
-            if args.loss == 'cross-entropy':
-                _backward(cross_entropy)
-            else:
+            if args.loss == 'hellinger':
                 _backward(hellinger)
+            elif args.loss == 'cross-2-entropy':
+                _backward(cross_entropy - 0.1*entropy)
+            else:
+                _backward(cross_entropy)
 
         if not args.distributed:
             hellinger_m.update(hellinger.item() * accum_steps, input.size(0))
@@ -1116,6 +1120,9 @@ def train_one_epoch(
             if args.loss == 'hellinger':
                 loss_val = hellinger_m.val
                 loss_avg = hellinger_m.avg
+            elif args.loss == 'cross-2-entropy':
+                loss_val = cross_entropy_m.val - 0.1 * entropy_m.val
+                loss_avg = cross_entropy_m.avg - 0.1 * entropy_m.avg
             else:
                 loss_val = cross_entropy_m.val
                 loss_avg = cross_entropy_m.avg
