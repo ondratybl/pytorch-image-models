@@ -336,8 +336,11 @@ def validate(args):
 
                 if valid_labels is not None:
                     output = output[:, valid_labels]
+                # Compute loss
                 loss = criterion(output, target)
-                entropy = criterion(output, output)
+
+                # Compute entropy
+                entropy = criterion(output, torch.softmax(output, dim=1))
 
             if real_labels is not None:
                 real_labels.add_result(output)
