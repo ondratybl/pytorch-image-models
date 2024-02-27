@@ -1015,20 +1015,20 @@ def train_one_epoch(
                 # Model output
                 output = model(input)
 
-                # Hellinger
+                # Hellinger & Accuracy
                 if target.dim() == 1:  # Label encoding
                     hellinger = -torch.sum(torch.sqrt(
                         1.e-4 + torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
                     ))
+                    accuracy = utils.accuracy(output.detach(), target)
                 else:  # One-hot-encoding
                     hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
+                    accuracy = utils.accuracy(output.detach(), torch.softmax(target, dim=1))
 
                 # Cross entropy
                 cross_entropy = loss_fn(output, target)
                 entropy = nn.CrossEntropyLoss()(output, torch.softmax(output, dim=1))
 
-                # Accuracy
-                accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
                 hellinger /= accum_steps
                 cross_entropy /= accum_steps
