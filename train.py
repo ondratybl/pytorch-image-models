@@ -1023,7 +1023,7 @@ def train_one_epoch(
                     accuracy = utils.accuracy(output.detach(), target)
                 else:  # One-hot-encoding
                     hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
-                    accuracy = utils.accuracy(output.detach(), torch.softmax(target, dim=1))
+                    accuracy = utils.accuracy(output.detach(), torch.argmax(target, dim=1))
 
                 # Cross entropy
                 cross_entropy = loss_fn(output, target)
