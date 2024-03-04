@@ -1013,21 +1013,23 @@ def train_one_epoch(
             with amp_autocast():
 
                 # Model output
-                output = model(input)
+                output_raw = model(input)
+                output = torch.mean(output_raw, dim=0)
 
-                # Hellinger & Accuracy
                 if target.dim() == 1:  # Label encoding
-                    hellinger = -torch.sum(torch.sqrt(
-                        1.e-4 + torch.softmax(output, dim=1) * torch.nn.functional.one_hot(target, output.size()[1])
-                    ))
-                    accuracy = utils.accuracy(output.detach(), target)
+                    target_tmp = torch.nn.functional.one_hot(target, output_raw.size()[1])
+                    target_tmp = torch.sum(target_tmp, dim=0)
+                    hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=0) * target_tmp))
+                    accuracy = utils.accuracy(output_raw.detach(), target)
+                    cross_entropy = loss_fn(output, target_tmp/output_raw.size()[0])
+
                 else:  # One-hot-encoding
                     hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
-                    accuracy = utils.accuracy(output.detach(), torch.argmax(target, dim=1))
+                    accuracy = utils.accuracy(output_raw.detach(), torch.argmax(target, dim=1))
 
-                # Cross entropy
-                cross_entropy = loss_fn(output, target)
-                entropy = nn.CrossEntropyLoss()(output, torch.softmax(output, dim=1))
+                    cross_entropy = loss_fn(output, target)
+
+                entropy = nn.CrossEntropyLoss()(output, torch.softmax(output, dim=0))
 
             if accum_steps > 1:
                 hellinger /= accum_steps
