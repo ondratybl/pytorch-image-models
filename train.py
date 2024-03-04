@@ -1012,7 +1012,7 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
 
-                # Model output
+                # Model outputs
                 output_raw = model(input)
                 output = torch.mean(output_raw, dim=0)
 
