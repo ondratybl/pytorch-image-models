@@ -147,6 +147,8 @@ group.add_argument('--interpolation', default='', type=str, metavar='NAME',
                    help='Image resize interpolation type (overrides model)')
 group.add_argument('-b', '--batch-size', type=int, default=128, metavar='N',
                    help='Input batch size for training (default: 128)')
+group.add_argument('--sub-batch-size', type=int, default=128, metavar='N',
+                   help='Input batch size for training (default: 128)')
 group.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
                    help='Validation batch size override (default: None)')
 group.add_argument('--channels-last', action='store_true', default=False,
@@ -1009,25 +1011,24 @@ def train_one_epoch(
         # multiply by accum steps to get equivalent for full update
         data_time_m.update(accum_steps * (time.time() - data_start_time))
 
-        def _forward():
+        def _forward(sub_batch_size=1):
             with amp_autocast():
 
                 # Model outputs
                 output_raw = model(input)
-                output = torch.mean(output_raw, dim=0)
+                output = torch.mean(torch.stack(torch.split(output_raw, sub_batch_size, dim=0)), dim=1)
 
                 if target.dim() == 1:  # Label encoding
-                    target_tmp = torch.nn.functional.one_hot(target, output_raw.size()[1])
-                    target_tmp = torch.sum(target_tmp, dim=0)
+                    target_tmp = torch.sum(torch.stack(torch.split(torch.nn.functional.one_hot(target, model.num_classes), sub_batch_size, dim=0)), dim=1)/sub_batch_size
                     hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=0) * target_tmp))
                     accuracy = utils.accuracy(output_raw.detach(), target)
-                    cross_entropy = loss_fn(output, target_tmp/output_raw.size()[0])
+                    cross_entropy = loss_fn(output, target_tmp)
 
                 else:  # One-hot-encoding
-                    hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target))
+                    target_tmp = torch.sum(torch.stack(torch.split(target, sub_batch_size, dim=0)), dim=1) / sub_batch_size
+                    hellinger = -torch.sum(torch.sqrt(1.e-4 + torch.softmax(output, dim=1) * target_tmp))
                     accuracy = utils.accuracy(output_raw.detach(), torch.argmax(target, dim=1))
-
-                    cross_entropy = loss_fn(output, target)
+                    cross_entropy = loss_fn(output, target_tmp)
 
                 entropy = nn.CrossEntropyLoss()(output, torch.softmax(output, dim=0))
 
@@ -1062,7 +1063,7 @@ def train_one_epoch(
 
         if has_no_sync and not need_update:
             with model.no_sync():
-                hellinger, cross_entropy, entropy, accuracy = _forward()
+                hellinger, cross_entropy, entropy, accuracy = _forward(args.sub_batch_size)
                 if args.loss == 'hellinger':
                     _backward(hellinger)
                 elif args.loss == 'cross-2-entropy':
@@ -1070,7 +1071,7 @@ def train_one_epoch(
                 else:
                     _backward(cross_entropy)
         else:
-            hellinger, cross_entropy, entropy, accuracy = _forward()
+            hellinger, cross_entropy, entropy, accuracy = _forward(args.sub_batch_size)
             if args.loss == 'hellinger':
                 _backward(hellinger)
             elif args.loss == 'cross-2-entropy':
