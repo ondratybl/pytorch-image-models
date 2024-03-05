@@ -147,8 +147,8 @@ group.add_argument('--interpolation', default='', type=str, metavar='NAME',
                    help='Image resize interpolation type (overrides model)')
 group.add_argument('-b', '--batch-size', type=int, default=128, metavar='N',
                    help='Input batch size for training (default: 128)')
-group.add_argument('--sub-batch-size', type=int, default=128, metavar='N',
-                   help='Input batch size for training (default: 128)')
+group.add_argument('--sub-batch-size', type=int, default=1, metavar='N',
+                   help='Input sub batch size for training (default: 1)')
 group.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
                    help='Validation batch size override (default: None)')
 group.add_argument('--channels-last', action='store_true', default=False,
