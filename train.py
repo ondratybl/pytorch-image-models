@@ -657,6 +657,10 @@ def main():
         num_samples=args.train_num_samples,
     )
 
+    if args.random_target:
+        import random
+        dataset_train.reader.samples = [(image, random.randint(0, model.num_classes)) for image,_ in dataset_train.reader.samples]
+
     if args.val_split:
         dataset_eval = create_dataset(
             args.dataset,
@@ -990,16 +994,14 @@ def train_one_epoch(
     optimizer.zero_grad()
     update_sample_count = 0
     for batch_idx, (input, target) in enumerate(loader):
+        if batch_idx == 0:
+            print(target)
+
         last_batch = batch_idx == last_batch_idx
         need_update = last_batch or (batch_idx + 1) % accum_steps == 0
         update_idx = batch_idx // accum_steps
         if batch_idx >= last_batch_idx_to_accum:
             accum_steps = last_accum_steps
-
-        # Random target
-        if args.random_target:
-            target = torch.randint(model.num_classes, target.size())  # completely random
-            #target = target[torch.randperm(target.size()[0])]  # shuffle within batch
 
         if not args.prefetcher:
             input, target = input.to(device), target.to(device)
