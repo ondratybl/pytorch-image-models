@@ -108,6 +108,8 @@ group.add_argument('--input-key', default=None, type=str,
                    help='Dataset key for input images.')
 group.add_argument('--target-key', default=None, type=str,
                    help='Dataset key for target labels.')
+group.add_argument('--random-target', action='store_true', default=False,
+                   help='Fit random labels.')
 
 # Model parameters
 group = parser.add_argument_group('Model parameters')
@@ -993,6 +995,11 @@ def train_one_epoch(
         update_idx = batch_idx // accum_steps
         if batch_idx >= last_batch_idx_to_accum:
             accum_steps = last_accum_steps
+
+        # Random target
+        if args.random_target:
+            target = torch.randint(model.num_classes, target.size())  # completely random
+            #target = target[torch.randperm(target.size()[0])]  # shuffle within batch
 
         if not args.prefetcher:
             input, target = input.to(device), target.to(device)
