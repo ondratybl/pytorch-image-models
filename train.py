@@ -657,12 +657,9 @@ def main():
         num_samples=args.train_num_samples,
     )
 
-    print(model.num_classes)
-    print(max([b for (a,b) in dataset_train.reader.samples]))
-
     if args.random_target:
         import random
-        dataset_train.reader.samples = [(image, random.randint(0, model.num_classes)) for image, _ in dataset_train.reader.samples]
+        dataset_train.reader.samples = [(image, random.randint(0, model.num_classes-1)) for image, _ in dataset_train.reader.samples]
 
     if args.val_split:
         dataset_eval = create_dataset(
