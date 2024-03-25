@@ -62,7 +62,7 @@ class BasicBlock(nn.Module):
     ):
         """
         Args:
-            inplanes: Input channel dimensionality.
+            inplanes: Input chafnnel dimensionality.
             planes: Used to determine output channel dimensionalities.
             stride: Stride used in convolution layers.
             downsample: Optional downsample layer for residual path.
@@ -359,7 +359,7 @@ def make_blocks(
     return stages, feature_info
 
 
-class ResNet(nn.Module):
+class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
     """ResNet / ResNeXt / SE-ResNeXt / SE-Net
 
     This class implements all variants of ResNet, ResNeXt, SE-ResNeXt, and SENet that
@@ -497,7 +497,8 @@ class ResNet(nn.Module):
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
-        channels = [64, 128, 256, 512]
+        #channels = [8, 16, 32, 64]
+        channels = [64, 128, 256, 512] # TODO
         stage_modules, stage_feature_info = make_blocks(
             block,
             channels,
@@ -521,7 +522,7 @@ class ResNet(nn.Module):
         self.feature_info.extend(stage_feature_info)
 
         # Head (Pooling and Classifier)
-        self.num_features = 512 * block.expansion
+        self.num_features = channels[-1] * block.expansion
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
         self.init_weights(zero_init_last=zero_init_last)
