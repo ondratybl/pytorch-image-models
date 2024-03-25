@@ -497,8 +497,8 @@ class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
-        #channels = [8, 16, 32, 64]
-        channels = [64, 128, 256, 512] # TODO
+        channels = [8, 16, 32, 64]
+        #channels = [64, 128, 256, 512] # TODO
         stage_modules, stage_feature_info = make_blocks(
             block,
             channels,
