@@ -393,8 +393,10 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 group.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
                    help='name of wandb experiment to be shown in the interface')
-group.add_argument('--note-wandb', default='', type=str, metavar='NAME',
+group.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
                    help='longer description of the run, like a -m commit message in git')
+group.add_argument('--tags-wandb', default='', type=str, metavar='NAME',
+                   help='tags of the run')
 
 
 def _parse_args():
@@ -827,7 +829,7 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
-            wandb.init(project=args.experiment, config=args, name=args.name_wandb, notes=args.note_wandb)
+            wandb.init(project=args.experiment, config=args, name=args.name_wandb, notes=args.notes_wandb, tags=args.tags_wandb)
         else:
             _logger.warning(
                 "You've requested to log metrics to wandb but package not found. "
