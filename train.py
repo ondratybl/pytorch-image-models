@@ -491,7 +491,6 @@ def main():
         **factory_kwargs,
         **args.model_kwargs,
     )
-    print('Number of trainable params: ' + str(sum(p.numel() for p in model.parameters() if p.requires_grad)))
     if args.head_init_scale is not None:
         with torch.no_grad():
             model.get_classifier().weight.mul_(args.head_init_scale)
@@ -857,7 +856,7 @@ def main():
     if utils.is_primary(args):
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
-
+    print('Number of trainable params: ' + str(sum(p.numel() for p in model.parameters() if p.requires_grad)))
     results = []
     try:
         for epoch in range(start_epoch, num_epochs):
