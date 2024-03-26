@@ -393,6 +393,8 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 group.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
                    help='name of wandb experiment to be shown in the interface')
+group.add_argument('--note-wandb', default='', type=str, metavar='NAME',
+                   help='longer description of the run, like a -m commit message in git')
 
 
 def _parse_args():
@@ -487,6 +489,7 @@ def main():
         **factory_kwargs,
         **args.model_kwargs,
     )
+    print('Number of trainable params: ' + str(sum(p.numel() for p in model.parameters() if p.requires_grad)))
     if args.head_init_scale is not None:
         with torch.no_grad():
             model.get_classifier().weight.mul_(args.head_init_scale)
@@ -824,7 +827,7 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
-            wandb.init(project=args.experiment, config=args, name=args.name_wandb)
+            wandb.init(project=args.experiment, config=args, name=args.name_wandb, notes=args.note_wandb)
         else:
             _logger.warning(
                 "You've requested to log metrics to wandb but package not found. "
@@ -1114,7 +1117,7 @@ def train_one_epoch(
     if hasattr(optimizer, 'sync_lookahead'):
         optimizer.sync_lookahead()
 
-    return OrderedDict([('loss', losses_m.avg)])
+    return OrderedDict([('loss', losses_m.avg), ('top1', accuracies_m.avg)])
 
 
 def validate(
