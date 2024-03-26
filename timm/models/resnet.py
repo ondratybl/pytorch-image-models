@@ -306,6 +306,7 @@ def make_blocks(
         drop_path_rate: float = 0.,
         **kwargs,
 ) -> Tuple[List[Tuple[str, nn.Module]], List[Dict[str, Any]]]:
+
     stages = []
     feature_info = []
     net_num_blocks = sum(block_repeats)
@@ -359,7 +360,7 @@ def make_blocks(
     return stages, feature_info
 
 
-class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
+class ResNet(nn.Module):
     """ResNet / ResNeXt / SE-ResNeXt / SE-Net
 
     This class implements all variants of ResNet, ResNeXt, SE-ResNeXt, and SENet that
@@ -415,6 +416,7 @@ class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
             drop_block_rate: float = 0.,
             zero_init_last: bool = True,
             block_args: Optional[Dict[str, Any]] = None,
+            size_expander: int = 64
     ):
         """
         Args:
@@ -445,6 +447,7 @@ class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
             drop_block_rate (float): Drop block rate (default 0.)
             zero_init_last (bool): zero-init the last weight in residual path (usually last BN affine weight)
             block_args (dict): Extra kwargs to pass through to block module
+            size expander (int): default retrieves the behariour from the original paper, smaller values shrink the model
         """
         super(ResNet, self).__init__()
         block_args = block_args or dict()
@@ -455,10 +458,11 @@ class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
         
         act_layer = get_act_layer(act_layer)
         norm_layer = get_norm_layer(norm_layer)
+        channels = [size_expander*i for i in [1, 2, 4, 8]]
 
         # Stem
         deep_stem = 'deep' in stem_type
-        inplanes = stem_width * 2 if deep_stem else 64
+        inplanes = stem_width * 2 if deep_stem else channels[0]
         if deep_stem:
             stem_chs = (stem_width, stem_width)
             if 'tiered' in stem_type:
@@ -497,8 +501,6 @@ class ResNet(nn.Module): # TODO: change channels, base_width, stemp_width
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
-        channels = [8, 16, 32, 64]
-        #channels = [64, 128, 256, 512] # TODO
         stage_modules, stage_feature_info = make_blocks(
             block,
             channels,
