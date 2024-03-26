@@ -463,6 +463,7 @@ class ResNet(nn.Module):
         # Stem
         deep_stem = 'deep' in stem_type
         inplanes = stem_width * 2 if deep_stem else channels[0]
+        print('Testovani: ' + str(inplanes))
         if deep_stem:
             stem_chs = (stem_width, stem_width)
             if 'tiered' in stem_type:
