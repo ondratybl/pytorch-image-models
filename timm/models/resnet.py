@@ -458,11 +458,10 @@ class ResNet(nn.Module):
         
         act_layer = get_act_layer(act_layer)
         norm_layer = get_norm_layer(norm_layer)
-        channels = [size_expander*i for i in [1, 2, 4, 8]]
 
         # Stem
         deep_stem = 'deep' in stem_type
-        inplanes = stem_width * 2 if deep_stem else channels[0]
+        inplanes = stem_width * 2 if deep_stem else size_expander
         if deep_stem:
             stem_chs = (stem_width, stem_width)
             if 'tiered' in stem_type:
@@ -501,6 +500,7 @@ class ResNet(nn.Module):
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
+        channels = [size_expander * i for i in [1, 2, 4, 8]]
         stage_modules, stage_feature_info = make_blocks(
             block,
             channels,
