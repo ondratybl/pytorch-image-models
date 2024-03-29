@@ -873,7 +873,7 @@ def main():
                 train_loss_fn,
                 args,
                 lr_scheduler=lr_scheduler,
-                saver=saver,
+                saver=None,  #saver,
                 output_dir=output_dir,
                 amp_autocast=amp_autocast,
                 loss_scaler=loss_scaler,
