@@ -1018,7 +1018,10 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 loss = loss_fn(output, target)
-                accuracy = utils.accuracy(output.detach(), target)
+                if target.dim():
+                    accuracy = utils.accuracy(output.detach(), torch.argmax(target, dim=1))
+                else:
+                    accuracy = utils.accuracy(output.detach(), target)
             if accum_steps > 1:
                 loss /= accum_steps
             return loss, accuracy
