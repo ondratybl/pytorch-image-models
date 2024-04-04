@@ -926,7 +926,7 @@ def main():
                     log_wandb=args.log_wandb and has_wandb,
                 )
 
-            if eval_metrics is not None:
+            if (eval_metrics is not None) and (not args.random_target):
                 latest_metric = eval_metrics[eval_metric]
             else:
                 latest_metric = train_metrics[eval_metric]
