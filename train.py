@@ -395,7 +395,7 @@ group.add_argument('--name-wandb', default='default_wandb_name', type=str, metav
                    help='name of wandb experiment to be shown in the interface')
 group.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
                    help='longer description of the run, like a -m commit message in git')
-group.add_argument('--tags-wandb', default='', type=str, metavar='NAME',
+group.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
                    help='tags of the run')
 
 
@@ -680,6 +680,19 @@ def main():
             num_samples=args.val_num_samples,
         )
 
+        dataset_eval_cum = create_dataset(
+            args.dataset,
+            root='tests/',
+            split='valid_random_labels',
+            is_training=False,
+            class_map=args.class_map,
+            download=args.dataset_download,
+            batch_size=args.batch_size,
+            input_img_mode=input_img_mode,
+            input_key=args.input_key,
+            target_key=args.target_key,
+        )
+
     # setup mixup / cutmix
     collate_fn = None
     mixup_fn = None
@@ -752,6 +765,22 @@ def main():
             eval_workers = min(2, args.workers)
         loader_eval = create_loader(
             dataset_eval,
+            input_size=data_config['input_size'],
+            batch_size=args.validation_batch_size or args.batch_size,
+            is_training=False,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=eval_workers,
+            distributed=args.distributed,
+            crop_pct=data_config['crop_pct'],
+            pin_memory=args.pin_mem,
+            device=device,
+            use_prefetcher=args.prefetcher,
+        )
+
+        loader_eval_cum = create_loader(
+            dataset_eval_cum,
             input_size=data_config['input_size'],
             batch_size=args.validation_batch_size or args.batch_size,
             is_training=False,
@@ -897,6 +926,18 @@ def main():
                     amp_autocast=amp_autocast,
                 )
 
+                eval_cum = []
+                for input, target in loader_eval_cum:
+                    eval_cum.append(torch.stack([
+                        torch.full(target.size(), epoch),
+                        target,
+                        torch.argmax(model(input), dim=1)
+                    ]))
+                eval_cum = torch.concat(eval_cum, dim=1).detach().cpu().tolist()
+
+                if args.log_wandb and has_wandb:
+                    wandb.log({'eval_cum': eval_cum})
+
                 if model_ema is not None and not args.model_ema_force_cpu:
                     if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                         utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
@@ -1018,7 +1059,7 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 loss = loss_fn(output, target)
-                if target.dim():
+                if target.dim() == 2:
                     accuracy = utils.accuracy(output.detach(), torch.argmax(target, dim=1))
                 else:
                     accuracy = utils.accuracy(output.detach(), target)
