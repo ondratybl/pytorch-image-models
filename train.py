@@ -928,6 +928,8 @@ def main():
 
                 eval_cum = []
                 for input, target in loader_eval_cum:
+                    if target.dim() == 2:
+                        target = torch.argmax(target, dim=1)
                     eval_cum.append(torch.stack([
                         torch.full(target.size(), epoch),
                         target,
