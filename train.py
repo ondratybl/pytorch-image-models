@@ -932,8 +932,8 @@ def main():
                         target = torch.argmax(target, dim=1)
                     eval_cum.append(torch.stack([
                         torch.full(target.size(), epoch),
-                        target,
-                        torch.argmax(model(input), dim=1)
+                        target.detach().cpu(),
+                        torch.argmax(model(input).detach().cpu(), dim=1)
                     ]))
                 eval_cum = torch.concat(eval_cum, dim=1).detach().cpu().tolist()
 
