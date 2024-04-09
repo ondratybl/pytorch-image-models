@@ -857,7 +857,14 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
-            wandb.init(project=args.experiment, config=args, name=args.name_wandb, notes=args.notes_wandb, tags=[args.tags_wandb])
+            os.environ["WANDB_RUN_GROUP"] = "experiment-" + wandb.util.generate_id()
+            wandb.init(
+                project=args.experiment,
+                config=args,
+                name=args.name_wandb,
+                notes=args.notes_wandb,
+                tags=[args.tags_wandb]
+            )
         else:
             _logger.warning(
                 "You've requested to log metrics to wandb but package not found. "
