@@ -901,6 +901,20 @@ def main():
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
+            eval_cum = []
+            for input, target in loader_eval_cum:
+                if target.dim() == 2:
+                    target = torch.argmax(target, dim=1)
+                eval_cum.append(torch.stack([
+                    torch.full(target.to(device).size(), epoch),
+                    target.detach().to(device),
+                    torch.argmax(model(input).detach().to(device), dim=1)
+                ]))
+            eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
+
+            if args.log_wandb and has_wandb:
+                wandb.log({'eval_cum': eval_cum})
+
             train_metrics = train_one_epoch(
                 epoch,
                 model,
@@ -938,9 +952,9 @@ def main():
                     if target.dim() == 2:
                         target = torch.argmax(target, dim=1)
                     eval_cum.append(torch.stack([
-                        torch.full(target.size(), epoch),
-                        target.detach(),
-                        torch.argmax(model(input).detach(), dim=1)
+                        torch.full(target.to(device).size(), epoch),
+                        target.detach().to(device),
+                        torch.argmax(model(input).detach().to(device), dim=1)
                     ]))
                 eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
 
