@@ -901,13 +901,13 @@ def main():
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
-            eval_cum = []
+            eval_cum = [].to(device)
             for input, target in loader_eval_cum:
                 if target.dim() == 2:
-                    target = torch.argmax(target, dim=1)
+                    target = torch.argmax(target, dim=1).to(device)
                 eval_cum.append(torch.stack([
-                    torch.full(target.to(device).size(), epoch),
-                    target.detach().to(device),
+                    torch.full(target.size(), epoch),
+                    target.detach(),
                     torch.argmax(model(input).detach().to(device), dim=1)
                 ]))
             eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
