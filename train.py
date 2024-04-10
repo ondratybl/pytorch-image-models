@@ -939,10 +939,10 @@ def main():
                         target = torch.argmax(target, dim=1)
                     eval_cum.append(torch.stack([
                         torch.full(target.size(), epoch),
-                        target.detach().cpu(),
-                        torch.argmax(model(input).detach().cpu(), dim=1)
+                        target.detach(),
+                        torch.argmax(model(input).detach(), dim=1)
                     ]))
-                eval_cum = torch.concat(eval_cum, dim=1).detach().cpu().tolist()
+                eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
 
                 if args.log_wandb and has_wandb:
                     wandb.log({'eval_cum': eval_cum})
