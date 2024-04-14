@@ -855,7 +855,8 @@ def main():
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
-    if utils.is_primary(args) and args.log_wandb:
+    #if utils.is_primary(args) and args.log_wandb:
+    if args.log_wandb:
         if has_wandb:
             print(torch.cuda.current_device())
             wandb.init(
@@ -864,7 +865,7 @@ def main():
                 name=args.name_wandb,
                 notes=args.notes_wandb,
                 tags=[args.tags_wandb],
-                group="experiment-" + wandb.util.generate_id(),
+                group=args.name_wandb,
             )
         else:
             _logger.warning(
