@@ -1199,11 +1199,10 @@ def validate(
 
                 input = input.to(torch.device('cpu'))
                 target = target.to(torch.device('cpu'))
+                output = model(input).to(torch.device('cpu'))
                 if args.channels_last:
                     input = input.contiguous(memory_format=torch.channels_last)
 
-                with amp_autocast():
-                    output = model(input)
                     if isinstance(output, (tuple, list)):
                         output = output[0]
 
