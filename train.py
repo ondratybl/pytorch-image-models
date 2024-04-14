@@ -680,7 +680,7 @@ def main():
             num_samples=args.val_num_samples,
         )
 
-        dataset_eval_cum = create_dataset(
+        dataset_watch = create_dataset(
             args.dataset,
             root='tests/',
             split='valid_random_labels',
@@ -779,8 +779,8 @@ def main():
             use_prefetcher=args.prefetcher,
         )
 
-        loader_eval_cum = create_loader(
-            dataset_eval_cum,
+        loader_watch = create_loader(
+            dataset_watch,
             input_size=data_config['input_size'],
             batch_size=args.validation_batch_size or args.batch_size,
             is_training=False,
@@ -901,20 +901,7 @@ def main():
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
-            eval_cum = [].to(device)
-            for input, target in loader_eval_cum:
-                if target.dim() == 2:
-                    target = torch.argmax(target, dim=1).to(device)
-                eval_cum.append(torch.stack([
-                    torch.full(target.size(), epoch),
-                    target.detach(),
-                    torch.argmax(model(input).detach().to(device), dim=1)
-                ]))
-            eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
-
-            if args.log_wandb and has_wandb:
-                wandb.log({'eval_cum': eval_cum})
-
+            """
             train_metrics = train_one_epoch(
                 epoch,
                 model,
@@ -931,13 +918,25 @@ def main():
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
             )
-
+            """
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if utils.is_primary(args):
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
             if loader_eval is not None:
+
+                if args.log_wandb and has_wandb:
+                    validate(
+                        model,
+                        loader_watch,
+                        validate_loss_fn,
+                        args,
+                        device=torch.device('cpu'),
+                        amp_autocast=amp_autocast,
+                        log_suffix=' (WATCH)'
+                    )
+
                 eval_metrics = validate(
                     model,
                     loader_eval,
@@ -1207,6 +1206,34 @@ def validate(
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():
+
+        if log_suffix == ' (WATCH)':
+            watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
+            for input, target in loader:
+
+                if not args.prefetcher:
+                    input = input.to(device)
+                    target = target.to(device)
+                if args.channels_last:
+                    input = input.contiguous(memory_format=torch.channels_last)
+
+                with amp_autocast():
+                    output = model(input)
+                    if isinstance(output, (tuple, list)):
+                        output = output[0]
+
+                if target.dim() == 2:
+                    target = torch.argmax(target, dim=1)
+
+                for l1, l2, l3 in zip(
+                        torch.mean(input, dim=(1, 2, 3)).numpy(),
+                        target.numpy(),
+                        torch.argmax(output, dim=1).numpy()
+                ):
+                    watch_log.add_data(l1.item(), l2.item(), l3.item())
+
+            wandb.log({'watch_log': watch_log})
+
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
