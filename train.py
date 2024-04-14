@@ -902,7 +902,6 @@ def main():
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
-            """
             train_metrics = train_one_epoch(
                 epoch,
                 model,
@@ -919,7 +918,7 @@ def main():
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
             )
-            """
+
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if utils.is_primary(args):
                     _logger.info("Distributing BatchNorm running means and vars")
