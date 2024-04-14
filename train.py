@@ -679,19 +679,19 @@ def main():
             target_key=args.target_key,
             num_samples=args.val_num_samples,
         )
-        if utils.is_primary(args):
-            dataset_watch = create_dataset(
-                args.dataset,
-                root='tests/',
-                split='valid_random_labels',
-                is_training=False,
-                class_map=args.class_map,
-                download=args.dataset_download,
-                batch_size=args.batch_size,
-                input_img_mode=input_img_mode,
-                input_key=args.input_key,
-                target_key=args.target_key,
-            )
+
+        dataset_watch = create_dataset(
+            args.dataset,
+            root='tests/',
+            split='valid_random_labels',
+            is_training=False,
+            class_map=args.class_map,
+            download=args.dataset_download,
+            batch_size=args.batch_size,
+            input_img_mode=input_img_mode,
+            input_key=args.input_key,
+            target_key=args.target_key,
+        )
 
     # setup mixup / cutmix
     collate_fn = None
@@ -778,22 +778,22 @@ def main():
             device=device,
             use_prefetcher=args.prefetcher,
         )
-        if utils.is_primary(args):
-            loader_watch = create_loader(
-                dataset_watch,
-                input_size=data_config['input_size'],
-                batch_size=args.validation_batch_size or args.batch_size,
-                is_training=False,
-                interpolation=data_config['interpolation'],
-                mean=data_config['mean'],
-                std=data_config['std'],
-                num_workers=eval_workers,
-                distributed=False,  # args.distributed,
-                crop_pct=data_config['crop_pct'],
-                pin_memory=args.pin_mem,
-                device=device,
-                use_prefetcher=args.prefetcher,
-            )
+
+        loader_watch = create_loader(
+            dataset_watch,
+            input_size=data_config['input_size'],
+            batch_size=args.validation_batch_size or args.batch_size,
+            is_training=False,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=eval_workers,
+            distributed=args.distributed,
+            crop_pct=data_config['crop_pct'],
+            pin_memory=args.pin_mem,
+            device=device,
+            use_prefetcher=args.prefetcher,
+        )
 
     # setup loss function
     if args.jsd_loss:
@@ -855,22 +855,22 @@ def main():
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
-    if utils.is_primary(args) and args.log_wandb:
-        if args.log_wandb:
-            if has_wandb:
-                print('Init wandb on device ' + str(torch.cuda.current_device()))
-                wandb.init(
-                    project=args.experiment,
-                    config=args,
-                    name=args.name_wandb,
-                    notes=args.notes_wandb,
-                    tags=[args.tags_wandb],
-                    group=args.name_wandb,
-                )
-            else:
-                _logger.warning(
-                    "You've requested to log metrics to wandb but package not found. "
-                    "Metrics not being logged to wandb, try `pip install wandb`")
+    #if utils.is_primary(args) and args.log_wandb:
+    if args.log_wandb:
+        if has_wandb:
+            print('Init wandb on device ' + str(torch.cuda.current_device()))
+            wandb.init(
+                project=args.experiment,
+                config=args,
+                name=args.name_wandb,
+                notes=args.notes_wandb,
+                tags=[args.tags_wandb],
+                group=args.name_wandb,
+            )
+        else:
+            _logger.warning(
+                "You've requested to log metrics to wandb but package not found. "
+                "Metrics not being logged to wandb, try `pip install wandb`")
 
     # setup learning rate schedule and starting epoch
     updates_per_epoch = (len(loader_train) + args.grad_accum_steps - 1) // args.grad_accum_steps
@@ -927,7 +927,7 @@ def main():
 
             if loader_eval is not None:
 
-                if (args.log_wandb and has_wandb) and utils.is_primary(args):
+                if args.log_wandb and has_wandb:
                     validate(
                         model,
                         loader_watch,
@@ -1249,7 +1249,7 @@ def validate(
             else:
                 reduced_loss = loss.data
 
-            if (device.type == 'cuda') and (log_suffix != ' (WATCH)'):
+            if device.type == 'cuda':
                 torch.cuda.synchronize()
 
             losses_m.update(reduced_loss.item(), input.size(0))
