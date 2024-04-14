@@ -1249,7 +1249,7 @@ def validate(
             else:
                 reduced_loss = loss.data
 
-            if device.type == 'cuda':
+            if (device.type == 'cuda') and (log_suffix != ' (WATCH)'):
                 torch.cuda.synchronize()
 
             losses_m.update(reduced_loss.item(), input.size(0))
