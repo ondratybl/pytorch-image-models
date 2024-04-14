@@ -1197,9 +1197,8 @@ def validate(
             watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
             for input, target in loader:
 
-                if not args.prefetcher:
-                    input = input.to(torch.device('cpu'))
-                    target = target.to(torch.device('cpu'))
+                input = input.to(torch.device('cpu'))
+                target = target.to(torch.device('cpu'))
                 if args.channels_last:
                     input = input.contiguous(memory_format=torch.channels_last)
 
