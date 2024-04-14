@@ -946,20 +946,6 @@ def main():
                     amp_autocast=amp_autocast,
                 )
 
-                eval_cum = []
-                for input, target in loader_eval_cum:
-                    if target.dim() == 2:
-                        target = torch.argmax(target, dim=1)
-                    eval_cum.append(torch.stack([
-                        torch.full(target.to(device).size(), epoch),
-                        target.detach().to(device),
-                        torch.argmax(model(input).detach().to(device), dim=1)
-                    ]))
-                eval_cum = torch.concat(eval_cum, dim=1).detach().tolist()
-
-                if args.log_wandb and has_wandb:
-                    wandb.log({'eval_cum': eval_cum})
-
                 if model_ema is not None and not args.model_ema_force_cpu:
                     if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                         utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
