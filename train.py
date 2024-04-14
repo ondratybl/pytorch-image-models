@@ -857,7 +857,7 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
-            os.environ["WANDB_RUN_GROUP"] = "experiment-" + wandb.util.generate_id()
+            #os.environ["WANDB_RUN_GROUP"] = "experiment-" + wandb.util.generate_id()
             wandb.init(
                 project=args.experiment,
                 config=args,
@@ -932,7 +932,7 @@ def main():
                         loader_watch,
                         validate_loss_fn,
                         args,
-                        device=torch.device('cpu'),
+                        device=torch.device('cuda:0'),
                         amp_autocast=amp_autocast,
                         log_suffix=' (WATCH)'
                     )
@@ -1197,9 +1197,9 @@ def validate(
             watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
             for input, target in loader:
 
-                input = input.to(torch.device('cpu'))
-                target = target.to(torch.device('cpu'))
-                output = model(input).to(torch.device('cpu'))
+                input = input.to(torch.device('cuda:0'))
+                target = target.to(torch.device('cuda:0'))
+                output = model(input).to(torch.device('cuda:0'))
                 if args.channels_last:
                     input = input.contiguous(memory_format=torch.channels_last)
 
@@ -1210,9 +1210,9 @@ def validate(
                     target = torch.argmax(target, dim=1)
 
                 for l1, l2, l3 in zip(
-                        torch.mean(input, dim=(1, 2, 3)).numpy(),
-                        target.numpy(),
-                        torch.argmax(output, dim=1).numpy()
+                        torch.mean(input, dim=(1, 2, 3)),
+                        target,
+                        torch.argmax(output, dim=1)
                 ):
                     watch_log.add_data(l1.item(), l2.item(), l3.item())
 
