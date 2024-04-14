@@ -58,7 +58,6 @@ except AttributeError:
 try:
     import wandb
     has_wandb = True
-    wandb_group = "experiment-" + wandb.util.generate_id()
 except ImportError:
     has_wandb = False
 
@@ -856,6 +855,22 @@ def main():
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
+    if utils.is_primary(args) and args.log_wandb:
+        if has_wandb:
+            print(torch.cuda.current_device())
+            wandb.init(
+                project=args.experiment,
+                config=args,
+                name=args.name_wandb,
+                notes=args.notes_wandb,
+                tags=[args.tags_wandb],
+                group="experiment-" + wandb.util.generate_id(),
+            )
+        else:
+            _logger.warning(
+                "You've requested to log metrics to wandb but package not found. "
+                "Metrics not being logged to wandb, try `pip install wandb`")
+
     # setup learning rate schedule and starting epoch
     updates_per_epoch = (len(loader_train) + args.grad_accum_steps - 1) // args.grad_accum_steps
     lr_scheduler, num_epochs = create_scheduler_v2(
@@ -910,17 +925,6 @@ def main():
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
-            if (epoch == 0 and has_wandb) and (utils.is_primary(args) and args.log_wandb):
-                print(torch.cuda.current_device())
-                wandb.init(
-                    project=args.experiment,
-                    config=args,
-                    name=args.name_wandb,
-                    notes=args.notes_wandb,
-                    tags=[args.tags_wandb],
-                    group=wandb_group,
-                )
-
             if loader_eval is not None:
 
                 if args.log_wandb and has_wandb:
@@ -929,7 +933,7 @@ def main():
                         loader_watch,
                         validate_loss_fn,
                         args,
-                        device=torch.device('cuda:0'),
+                        device=device,
                         amp_autocast=amp_autocast,
                         log_suffix=' (WATCH)'
                     )
@@ -1190,13 +1194,13 @@ def validate(
     last_idx = len(loader) - 1
     with torch.no_grad():
 
-        if log_suffix == ' (WATCH)':
+        if (log_suffix == ' (WATCH)') and (torch.cuda.current_device() == 0):
             watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
             for input, target in loader:
 
-                input = input.to(torch.device('cuda:0'))
-                target = target.to(torch.device('cuda:0'))
-                output = model(input).to(torch.device('cuda:0'))
+                input = input.to(device)
+                target = target.to(device)
+                output = model(input).to(device)
                 if args.channels_last:
                     input = input.contiguous(memory_format=torch.channels_last)
 
