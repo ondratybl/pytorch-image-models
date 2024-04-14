@@ -857,6 +857,7 @@ def main():
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
+            print(torch.cuda.current_device())
             wandb.init(
                 project=args.experiment,
                 config=args,
