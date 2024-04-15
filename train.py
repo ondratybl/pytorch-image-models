@@ -661,10 +661,6 @@ def main():
         num_samples=args.train_num_samples,
     )
 
-    if args.random_target:
-        import random
-        dataset_train.reader.samples = [(image, random.randint(0, args.num_classes-1)) for image, _ in dataset_train.reader.samples]
-
     if args.val_split:
         dataset_eval = create_dataset(
             args.dataset,
@@ -680,18 +676,37 @@ def main():
             num_samples=args.val_num_samples,
         )
 
-        dataset_watch = create_dataset(
+        dataset_watch = create_dataset(  # has to be the same as dataset_train
             args.dataset,
-            root='tests/',
-            split='valid_random_labels',
-            is_training=False,
+            root=args.data_dir,
+            split=args.train_split,
+            is_training=True,
             class_map=args.class_map,
             download=args.dataset_download,
             batch_size=args.batch_size,
+            seed=args.seed,
+            repeats=args.epoch_repeats,
             input_img_mode=input_img_mode,
             input_key=args.input_key,
             target_key=args.target_key,
+            num_samples=args.train_num_samples,
         )
+
+        # subset samples from dataset_watch
+        import random
+        if args.random_target:
+            random.seed(42)
+            new_targets = [(image, random.randint(0, args.num_classes - 1)) for image, _ in
+                                            dataset_train.reader.samples]
+            dataset_train.reader.samples = new_targets
+            dataset_watch.reader.samples = new_targets
+
+        random.seed(42)
+        dataset_watch.reader.samples = random.sample(dataset_watch.reader.samples, 4000)
+
+        print(f'First sample in train: {dataset_train.reader.samples[0]}')
+        print(f'100th sample in train: {dataset_train.reader.samples[100]}')
+        print(f'815th sample in train: {dataset_train.reader.samples[815]}')
 
     # setup mixup / cutmix
     collate_fn = None
@@ -858,7 +873,6 @@ def main():
     #if utils.is_primary(args) and args.log_wandb:
     if args.log_wandb:
         if has_wandb:
-            print('Init wandb on device ' + str(torch.cuda.current_device()))
             wandb.init(
                 project=args.experiment,
                 config=args,
@@ -1217,7 +1231,6 @@ def validate(
                 ):
                     watch_log.add_data(l1.item(), l2.item(), l3.item())
 
-            print(torch.cuda.current_device())
             wandb.log({'watch_log': watch_log})
 
         for batch_idx, (input, target) in enumerate(loader):
