@@ -676,33 +676,12 @@ def main():
             num_samples=args.val_num_samples,
         )
 
-        dataset_watch = create_dataset(  # has to be the same as dataset_train
-            args.dataset,
-            root=args.data_dir,
-            split=args.train_split,
-            is_training=True,
-            class_map=args.class_map,
-            download=args.dataset_download,
-            batch_size=args.batch_size,
-            seed=args.seed,
-            repeats=args.epoch_repeats,
-            input_img_mode=input_img_mode,
-            input_key=args.input_key,
-            target_key=args.target_key,
-            num_samples=args.train_num_samples,
-        )
-
         # subset samples from dataset_watch
-        import random
         if args.random_target:
+            import random
             random.seed(42)
-            new_targets = [(image, random.randint(0, args.num_classes - 1)) for image, _ in
+            dataset_train.reader.samples = [(image, random.randint(0, args.num_classes - 1)) for image, _ in
                                             dataset_train.reader.samples]
-            dataset_train.reader.samples = new_targets
-            dataset_watch.reader.samples = new_targets
-
-        random.seed(42)
-        dataset_watch.reader.samples = random.sample(dataset_watch.reader.samples, 4000)
 
         print(f'First sample in train: {dataset_train.reader.samples[0]}')
         print(f'100th sample in train: {dataset_train.reader.samples[100]}')
@@ -794,22 +773,6 @@ def main():
             use_prefetcher=args.prefetcher,
         )
 
-        loader_watch = create_loader(
-            dataset_watch,
-            input_size=data_config['input_size'],
-            batch_size=args.validation_batch_size or args.batch_size,
-            is_training=False,
-            interpolation=data_config['interpolation'],
-            mean=data_config['mean'],
-            std=data_config['std'],
-            num_workers=eval_workers,
-            distributed=args.distributed,
-            crop_pct=data_config['crop_pct'],
-            pin_memory=args.pin_mem,
-            device=device,
-            use_prefetcher=args.prefetcher,
-        )
-
     # setup loss function
     if args.jsd_loss:
         assert num_aug_splits > 1  # JSD only valid with aug splits set
@@ -870,8 +833,7 @@ def main():
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
-    #if utils.is_primary(args) and args.log_wandb:
-    if args.log_wandb:
+    if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
             wandb.init(
                 project=args.experiment,
@@ -939,19 +901,16 @@ def main():
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
+            if args.log_wandb and has_wandb:
+                validate_watch(
+                    model,
+                    loader_train,
+                    args,
+                    device=device,
+                    amp_autocast=amp_autocast,
+                )
+
             if loader_eval is not None:
-
-                if args.log_wandb and has_wandb:
-                    validate(
-                        model,
-                        loader_watch,
-                        validate_loss_fn,
-                        args,
-                        device=device,
-                        amp_autocast=amp_autocast,
-                        log_suffix=' (WATCH)'
-                    )
-
                 eval_metrics = validate(
                     model,
                     loader_eval,
@@ -1187,6 +1146,43 @@ def train_one_epoch(
 
     return OrderedDict([('loss', losses_m.avg), ('top1', accuracies_m.avg)])
 
+def validate_watch(
+        model,
+        loader,
+        args,
+        device=torch.device('cuda'),
+        amp_autocast=suppress,
+):
+
+    model.eval()
+    with torch.no_grad():
+        watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
+        for _ in range(4):
+
+            input, target = next(iter(loader))
+
+            if not args.prefetcher:
+                input = input.to(device)
+                target = target.to(device)
+            if args.channels_last:
+                input = input.contiguous(memory_format=torch.channels_last)
+
+            with amp_autocast():
+                output = model(input)
+                if isinstance(output, (tuple, list)):
+                    output = output[0]
+
+            if target.dim() == 2:
+                target = torch.argmax(target, dim=1)
+
+            for l1, l2, l3 in zip(
+                    torch.mean(input, dim=(1, 2, 3)),
+                    target,
+                    torch.argmax(output, dim=1)
+            ):
+                watch_log.add_data(l1.item(), l2.item(), l3.item())
+
+        wandb.log({'watch_log': watch_log})
 
 def validate(
         model,
@@ -1207,32 +1203,6 @@ def validate(
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():
-
-        if log_suffix == ' (WATCH)':
-            watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
-            for input, target in loader:
-
-                input = input.to(device)
-                target = target.to(device)
-                output = model(input).to(device)
-                if args.channels_last:
-                    input = input.contiguous(memory_format=torch.channels_last)
-
-                    if isinstance(output, (tuple, list)):
-                        output = output[0]
-
-                if target.dim() == 2:
-                    target = torch.argmax(target, dim=1)
-
-                for l1, l2, l3 in zip(
-                        torch.mean(input, dim=(1, 2, 3)),
-                        target,
-                        torch.argmax(output, dim=1)
-                ):
-                    watch_log.add_data(l1.item(), l2.item(), l3.item())
-
-            wandb.log({'watch_log': watch_log})
-
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
