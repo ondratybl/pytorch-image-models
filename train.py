@@ -773,6 +773,22 @@ def main():
             use_prefetcher=args.prefetcher,
         )
 
+        loader_watch = create_loader(
+            dataset_train,
+            input_size=data_config['input_size'],
+            batch_size=args.validation_batch_size or args.batch_size,
+            is_training=False,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=eval_workers,
+            distributed=args.distributed,
+            crop_pct=data_config['crop_pct'],
+            pin_memory=args.pin_mem,
+            device=device,
+            use_prefetcher=args.prefetcher,
+        )
+
     # setup loss function
     if args.jsd_loss:
         assert num_aug_splits > 1  # JSD only valid with aug splits set
@@ -904,7 +920,7 @@ def main():
             if args.log_wandb and has_wandb:
                 validate_watch(
                     model,
-                    loader_train,
+                    loader_watch,
                     args,
                     device=device,
                     amp_autocast=amp_autocast,
