@@ -397,6 +397,8 @@ group.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
                    help='longer description of the run, like a -m commit message in git')
 group.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
                    help='tags of the run')
+group.add_argument('--num-watch', default=4096, type=str, metavar='NAME',
+                   help='number of samples to be watched')
 
 
 def _parse_args():
@@ -773,6 +775,8 @@ def main():
             use_prefetcher=args.prefetcher,
         )
 
+        import random
+        random.seed(42)
         loader_watch = create_loader(
             dataset_train,
             input_size=data_config['input_size'],
@@ -787,6 +791,7 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
+            sampler=torch.utils.data.sampler.SubsetRandomSampler([random.sample(len(dataset_train.reader.samples)), args.num_watch])
         )
 
     # setup loss function
@@ -894,6 +899,15 @@ def main():
                 dataset_train.set_epoch(epoch)
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
+
+            if (args.log_wandb and has_wandb) and utils.is_primary(args):
+                validate_watch(
+                    model,
+                    loader_watch,
+                    args,
+                    device=device,
+                    amp_autocast=amp_autocast,
+                )
 
             train_metrics = train_one_epoch(
                 epoch,
@@ -1173,9 +1187,7 @@ def validate_watch(
     model.eval()
     with torch.no_grad():
         watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
-        for _ in range(4):
-
-            input, target = next(iter(loader))
+        for input, target in loader:
 
             if not args.prefetcher:
                 input = input.to(device)

@@ -226,6 +226,7 @@ def create_loader(
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
         tf_preprocessing: bool = False,
+        sampler=None,
 ):
     """
 
@@ -269,6 +270,7 @@ def create_loader(
         persistent_workers: Enable persistent worker processes.
         worker_seeding: Control worker random seeding at init.
         tf_preprocessing: Use TF 1.0 inference preprocessing for testing model ports.
+        sampler: sampler to be used
 
     Returns:
         DataLoader
@@ -311,19 +313,19 @@ def create_loader(
         # are correct before worker processes are launched
         dataset.set_loader_cfg(num_workers=num_workers)
 
-    sampler = None
-    if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
-        if is_training:
-            if num_aug_repeats:
-                sampler = RepeatAugSampler(dataset, num_repeats=num_aug_repeats)
+    if sampler is not None:
+        if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
+            if is_training:
+                if num_aug_repeats:
+                    sampler = RepeatAugSampler(dataset, num_repeats=num_aug_repeats)
+                else:
+                    sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             else:
-                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+                # This will add extra duplicate entries to result in equal num
+                # of samples per-process, will slightly alter validation results
+                sampler = OrderedDistributedSampler(dataset)
         else:
-            # This will add extra duplicate entries to result in equal num
-            # of samples per-process, will slightly alter validation results
-            sampler = OrderedDistributedSampler(dataset)
-    else:
-        assert num_aug_repeats == 0, "RepeatAugment not currently supported in non-distributed or IterableDataset use"
+            assert num_aug_repeats == 0, "RepeatAugment not currently supported in non-distributed or IterableDataset use"
 
     if collate_fn is None:
         collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate
