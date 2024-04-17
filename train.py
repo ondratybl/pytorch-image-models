@@ -917,7 +917,7 @@ def main():
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
-            if args.log_wandb and has_wandb:
+            if (args.log_wandb and has_wandb) and utils.is_primary(args):
                 validate_watch(
                     model,
                     loader_watch,
