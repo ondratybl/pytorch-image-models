@@ -791,7 +791,7 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler([random.sample(len(dataset_train.reader.samples)), args.num_watch])
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(len(dataset_train.reader.samples), k=args.num_watch))
         )
 
     # setup loss function
