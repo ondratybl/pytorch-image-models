@@ -397,7 +397,7 @@ group.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
                    help='longer description of the run, like a -m commit message in git')
 group.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
                    help='tags of the run')
-group.add_argument('--num-watch', default=4096, type=str, metavar='NAME',
+group.add_argument('--num-watch', default=4096, type=int, metavar='NAME',
                    help='number of samples to be watched')
 
 
@@ -791,7 +791,7 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(len(dataset_train.reader.samples), k=args.num_watch))
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_train.reader.samples)), k=args.num_watch))
         )
 
     # setup loss function
