@@ -313,7 +313,7 @@ def create_loader(
         # are correct before worker processes are launched
         dataset.set_loader_cfg(num_workers=num_workers)
 
-    if sampler is not None:
+    if sampler is None:
         if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
             if is_training:
                 if num_aug_repeats:
