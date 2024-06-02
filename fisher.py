@@ -65,6 +65,9 @@ def jacobian_batch(model, input, num_classes=1000):
 
 
 def get_eigenvalues(model, input, output, num_classes=20):
-    A = torch.matmul(cholesky_covariance(output)[:, :num_classes, :num_classes], jacobian_batch(model, input, num_classes=num_classes))
+    A = torch.matmul(cholesky_covariance(output[:, :num_classes]),
+                     jacobian_batch(model, input, num_classes=num_classes))  # pretend there are only some classes
+    #A = torch.matmul(cholesky_covariance(output)[:, :num_classes, :num_classes],
+    #                 jacobian_batch(model, input, num_classes=num_classes))  # drop remaining classes
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
     return torch.linalg.eigvalsh(ntk)
