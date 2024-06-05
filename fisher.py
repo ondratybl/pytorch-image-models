@@ -1,10 +1,30 @@
 import torch
+from torch.func import functional_call, vmap, grad
+from nngeometry.metrics import FIM
+from nngeometry.object import PMatKFAC, PMatDiag
 
 
-def cholesky_covariance(logits):
+def get_ntk_tenas(model, output):
+    # based on https://github.com/VITA-Group/TENAS/blob/main/prune_tenas.py
+    grads = []
+    for _idx in range(len(output)):
+        output[_idx:_idx+1].backward(torch.ones_like(output[_idx:_idx+1]), retain_graph=True)
+        grad = []
+        for name, W in model.named_parameters():
+            if 'weight' in name and W.grad is not None:
+                grad.append(W.grad.view(-1).detach())
+        grads.append(torch.cat(grad, -1))
+        model.zero_grad()
+    grads = torch.stack(grads, 0)
+    ntk = torch.einsum('nc,mc->nm', [grads, grads])
+    return torch.linalg.eigvalsh(ntk)
 
-    # Cholesky decomposition (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
-    prob = torch.nn.functional.softmax(logits, dim=1)
+
+def cholesky_covariance(output):
+
+    # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
+    alpha = 0.00001  # label smoothing for stability
+    prob = torch.nn.functional.softmax(output, dim=1)*(1-alpha)+alpha/output.shape[1]
     q = torch.ones(prob.shape) - torch.cumsum(prob, dim=1)
     q[:, -1] = torch.zeros(q[:, -1].shape)
     q_shift = torch.roll(q, shifts=1, dims=1)
@@ -31,8 +51,7 @@ def cholesky_covariance(logits):
 
 def gradient_batch(model, input):
 
-    from torch.func import functional_call, vmap, grad
-
+    # Use vmap to compute per-sample gradient wrt model parameters, model has one output dimension
     def compute_prediction(params, buffers, sample):
         return functional_call(model, (params, buffers), (sample.unsqueeze(0),))
     ft_compute_grad = grad(compute_prediction)
@@ -58,16 +77,59 @@ def jacobian_batch(model, input, num_classes=1000):
             first_dimension_output = original_output[:, self.dimension].squeeze(0)
             return first_dimension_output
 
+    # Get per-sample jacobian of multidimensional output wrt model parameters
     grads = []
-    for dim in range(num_classes):
+    for dim in range(num_classes):  # for each output dim compute (batch_size, model_param_count) tensor
+        model.zero_grad()
         grads.append(gradient_batch(WrappedModel(model, dim), input))
     return torch.transpose(torch.stack(grads), dim0=0, dim1=1)  # (batch_size, num_classes, model_param_count)
 
 
-def get_eigenvalues(model, input, output, num_classes=20):
-    A = torch.matmul(cholesky_covariance(output[:, :num_classes]),
-                     jacobian_batch(model, input, num_classes=num_classes))  # pretend there are only some classes
-    #A = torch.matmul(cholesky_covariance(output)[:, :num_classes, :num_classes],
-    #                 jacobian_batch(model, input, num_classes=num_classes))  # drop remaining classes
+def get_fisher(model, loader, num_classes):
+
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
+
+    f_fkac = FIM(
+        model=model,
+        loader=loader,
+        representation=PMatKFAC,
+        n_output=num_classes,
+        variant='classif_logits',
+        device=device
+    ).frobenius_norm().detach().item()
+
+    f_diag = FIM(
+        model=model,
+        loader=loader,
+        representation=PMatDiag,
+        n_output=num_classes,
+        variant='classif_logits',
+        device=device
+    ).frobenius_norm().detach().item()
+
+    return f_fkac, f_diag
+
+
+def get_eigenvalues(model, input, ntk_old, batch, num_classes=None):
+
+    # Returns eigenvalues of ntk, ntk_tenas and ntk itself
+
+    output = model(input)
+    if num_classes is None:
+        num_classes = output.shape[-1]
+    # ntk = A*A^T, fisher = A^T*A
+    A = torch.matmul(  # pretend there are only num_classes of classes
+        cholesky_covariance(output[:, :num_classes]),
+        jacobian_batch(model, input, num_classes=num_classes)
+    ).detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
-    return torch.linalg.eigvalsh(ntk)
+
+    # get eigenvalues
+    eig_ntk = torch.linalg.eigvalsh(ntk).detach().tolist()
+    eig_ntk_tenas = get_ntk_tenas(model, output).detach().tolist()
+    ntk_new = ((ntk_old * batch + ntk) / (batch + 1)).detach()
+
+    return eig_ntk, eig_ntk_tenas, ntk_new
