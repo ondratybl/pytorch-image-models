@@ -145,8 +145,10 @@ def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress)
     # ntk = A*A^T, fisher = A^T*A
     cholesky = cholesky_covariance(output)  # torch.float16
 
-    with amp_autocast():
-        jacobian = jacobian_batch_efficient(model, input)
+    print(f'Input dtype: {input.dtype}')
+
+
+    jacobian = jacobian_batch_efficient(model, input)
 
     print(f'Jacobian dtype: {cholesky.dtype}')
 
