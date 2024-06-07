@@ -31,7 +31,7 @@ def cholesky_covariance(output):
     alpha = 0.00001  # label smoothing for stability
     prob = torch.nn.functional.softmax(output, dim=1)*(1-alpha)+alpha/output.shape[1]
     q = torch.ones_like(prob) - torch.cumsum(prob, dim=1)
-    q[:, -1] = torch.zeros_like(q[:, -1].shape)
+    q[:, -1] = torch.zeros_like(q[:, -1])
     q_shift = torch.roll(q, shifts=1, dims=1)
     q_shift[:, 0] = torch.ones_like(q_shift[:, 0])
     d = torch.sqrt(prob * q / q_shift)
