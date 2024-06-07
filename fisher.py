@@ -21,27 +21,28 @@ def get_ntk_tenas(model, output):
 
 
 def cholesky_covariance(output):
-    print(f'Line 23: {output.get_device()}')
+
+    if output.get_device() < 0:
+        device = torch.device('cpu')
+    else:
+        device = torch.device(output.get_device())
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
     alpha = 0.00001  # label smoothing for stability
     prob = torch.nn.functional.softmax(output, dim=1)*(1-alpha)+alpha/output.shape[1]
-    print(f'Line 29: {prob.get_device()}')
-    print(f'Line 30: {torch.ones(prob.shape).get_device()}')
-    print(f'Line 31: {torch.cumsum(prob, dim=1).get_device()}')
-    """
-    q = torch.ones(prob.shape) - torch.cumsum(prob, dim=1)
-    q[:, -1] = torch.zeros(q[:, -1].shape)
+    q = torch.ones_like(prob) - torch.cumsum(prob, dim=1)
+    q[:, -1] = torch.zeros_like(q[:, -1].shape)
     q_shift = torch.roll(q, shifts=1, dims=1)
-    q_shift[:, 0] = torch.ones(q_shift[:, 0].shape)
+    q_shift[:, 0] = torch.ones_like(q_shift[:, 0])
     d = torch.sqrt(prob * q / q_shift)
 
     L = - torch.matmul(torch.unsqueeze(prob, dim=2), 1 / torch.transpose(torch.unsqueeze(q, dim=2), dim0=1, dim1=2))
     L = torch.nan_to_num(L, neginf=0.)
-    L = L * (1 - torch.eye(L.shape[1]).repeat(L.shape[0], 1, 1)) + torch.eye(L.shape[1]).repeat(L.shape[0], 1,
-                                                                                                1)  # replace diagonal elements by 1.
-    L = L * (1 - torch.triu(torch.ones(L.shape[1], L.shape[2]), diagonal=1).repeat(L.shape[0], 1,
-                                                                                   1))  # replace upper diagonal by 0
+    L = L * (1 - torch.eye(L.shape[1], device=device).repeat(L.shape[0], 1, 1)) + torch.eye(L.shape[1],
+                                                                                            device=device).repeat(
+        L.shape[0], 1, 1)  # replace diagonal elements by 1.
+    L = L * (1 - torch.triu(torch.ones(L.shape[1], L.shape[2], device=device), diagonal=1).repeat(L.shape[0], 1,
+                                                                                                  1))  # replace upper diagonal by 0
     L = torch.matmul(L, torch.diag_embed(d))  # multiply columns
 
     # Test
@@ -50,7 +51,6 @@ def cholesky_covariance(output):
     cov_cholesky = torch.matmul(L, torch.transpose(L, dim0=1, dim1=2))
     if torch.abs(cov_true - cov_cholesky).max().item() > 1.0e-5:
         print('Cholesky decomposition back-test error.')
-    """
     return None
 
 
@@ -142,7 +142,6 @@ def get_fisher(model, loader, num_classes):
 
 
 def get_eigenvalues(model, input, output, ntk_old, batch):
-    print(f'Line 140: {output.get_device()}')
 
     # ntk = A*A^T, fisher = A^T*A
     A = torch.matmul(cholesky_covariance(output), jacobian_batch_efficient(model, input)).detach()
