@@ -51,7 +51,7 @@ def cholesky_covariance(output):
     cov_cholesky = torch.matmul(L, torch.transpose(L, dim0=1, dim1=2))
     if torch.abs(cov_true - cov_cholesky).max().item() > 1.0e-5:
         print('Cholesky decomposition back-test error.')
-    return None
+    return L
 
 
 def gradient_batch(model, input):

@@ -1200,9 +1200,7 @@ def validate_fisher(
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
-        print(f'Line 1203: {output.get_device()}')
-
-        eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch)  # per batch ntk & tenas
+            eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch)  # per batch ntk & tenas
 
         wandb.log({
             'ntk_batch_max': eig_ntk_batch.max().item(), 'ntk_batch_sum': eig_ntk_batch.sum().item(),
@@ -1211,21 +1209,23 @@ def validate_fisher(
             'tenas_batch_sum2': torch.square(eig_tenas_batch).sum().item(), 'tenas_batch_std': eig_tenas_batch.std().item(),
             'batch': batch, 'epoch': epoch
         })
-    eig_ntk = torch.linalg.eigvalsh(ntk)  # per population ntk
-    print('Batches: ')
-    print(time.time() - start_time)
-    start_time = time.time()
-    fisher_norm = FIM(
-        model=model,
-        loader=loader,
-        representation=PMatDiag,
-        n_output=model.num_classes,
-        variant='classif_logits',
-        device=device
-    ).frobenius_norm().detach().item()
 
-    print('Fisher: ')
-    print(time.time() - start_time)
+    with amp_autocast():
+        eig_ntk = torch.linalg.eigvalsh(ntk)  # per population ntk
+        print('Batches: ')
+        print(time.time() - start_time)
+        start_time = time.time()
+        fisher_norm = FIM(
+            model=model,
+            loader=loader,
+            representation=PMatDiag,
+            n_output=model.num_classes,
+            variant='classif_logits',
+            device=device
+        ).frobenius_norm().detach().item()
+
+        print('Fisher: ')
+        print(time.time() - start_time)
 
     wandb.log({
         'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(),
