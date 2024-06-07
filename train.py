@@ -1200,7 +1200,7 @@ def validate_fisher(
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
-            eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch, amp_autocast)  # per batch ntk & tenas
+        eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch, amp_autocast)  # per batch ntk & tenas
 
         wandb.log({
             'ntk_batch_max': eig_ntk_batch.max().item(), 'ntk_batch_sum': eig_ntk_batch.sum().item(),

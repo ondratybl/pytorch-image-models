@@ -70,7 +70,7 @@ def gradient_batch(model, input):
     return torch.cat([torch.flatten(i, start_dim=1, end_dim=-1) for i in grads], dim=1)  # (batch_size, model_param_count)
 
 
-def jacobian_batch_efficient(model, input, amp_autocast=suppress):
+def jacobian_batch_efficient(model, input):
 
     params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
                                                                              model.named_buffers()}
@@ -81,9 +81,8 @@ def jacobian_batch_efficient(model, input, amp_autocast=suppress):
 
         return jacrev(compute_prediction)(params)
 
-    with amp_autocast():
-        jacobian_dict = vmap(jacobian_sample)(input)
-        ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
+    jacobian_dict = vmap(jacobian_sample)(input)
+    ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
 
     return ret
 
@@ -146,7 +145,15 @@ def get_fisher(model, loader, num_classes):
 def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress):
 
     # ntk = A*A^T, fisher = A^T*A
-    A = torch.matmul(cholesky_covariance(output), jacobian_batch_efficient(model, input, amp_autocast)).detach()
+    cholesky = cholesky_covariance(output)
+
+    print(f'Cholesky dtype: {cholesky.dtype}')
+
+    jacobian = jacobian_batch_efficient(model, input)
+
+    print(f'Jacobian dtype: {cholesky.dtype}')
+
+    A = torch.matmul(cholesky, jacobian).detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
     # get eigenvalues
