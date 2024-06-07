@@ -147,8 +147,7 @@ def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress)
 
     print(f'Input dtype: {input.dtype}')
 
-
-    jacobian = jacobian_batch_efficient(model, input)
+    jacobian = jacobian_batch_efficient(model, input.half())
 
     print(f'Jacobian dtype: {cholesky.dtype}')
 
