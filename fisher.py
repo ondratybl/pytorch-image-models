@@ -147,7 +147,17 @@ def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress)
 
     print(f'Input dtype: {input.dtype}')
 
-    jacobian = jacobian_batch_efficient(model, input.half())
+    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
+                                                                             model.named_buffers()}
+    sample = input[0]
+
+    def compute_prediction(params):
+        return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
+
+    with amp_autocast():
+        print(f'Input dtype: {vmap(compute_prediction)(params)}')
+
+    jacobian = jacobian_batch_efficient(model, input.half())  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
     print(f'Jacobian dtype: {cholesky.dtype}')
 
