@@ -1183,7 +1183,7 @@ def validate_fisher(
 ):
 
     model.eval()
-    ntk = torch.ones(model.num_classes, model.num_classes)
+    ntk = torch.ones(model.num_classes, model.num_classes, device=device)
     import time
     start_time = time.time()
     for batch, data in enumerate(loader):
