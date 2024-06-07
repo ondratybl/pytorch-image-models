@@ -1200,6 +1200,8 @@ def validate_fisher(
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
+        print(f'Line 1203: {output.get_device()}')
+
         eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch)  # per batch ntk & tenas
 
         wandb.log({
