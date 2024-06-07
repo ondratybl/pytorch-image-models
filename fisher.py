@@ -1,5 +1,5 @@
 import torch
-from torch.func import functional_call, vmap, grad
+from torch.func import functional_call, vmap, grad, jacrev
 from nngeometry.metrics import FIM
 from nngeometry.object import PMatKFAC, PMatDiag
 
@@ -64,7 +64,26 @@ def gradient_batch(model, input):
     return torch.cat([torch.flatten(i, start_dim=1, end_dim=-1) for i in grads], dim=1)  # (batch_size, model_param_count)
 
 
+def jacobian_batch_efficient(model, input):
+
+    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
+                                                                             model.named_buffers()}
+
+    def jacobian_sample(sample):
+        def compute_prediction(params):
+            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
+
+        return jacrev(compute_prediction)(params)
+
+    jacobian_dict = vmap(jacobian_sample)(input)
+    ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
+
+    return ret
+
+
 def jacobian_batch(model, input, num_classes=1000):
+    import time
+    start_time = time.time()
     class WrappedModel(torch.nn.Module):
         def __init__(self, original_model, dimension):
             super(WrappedModel, self).__init__()
@@ -82,24 +101,19 @@ def jacobian_batch(model, input, num_classes=1000):
     for dim in range(num_classes):  # for each output dim compute (batch_size, model_param_count) tensor
         model.zero_grad()
         grads.append(gradient_batch(WrappedModel(model, dim), input))
+
+    print(time.time() - start_time)
     return torch.transpose(torch.stack(grads), dim0=0, dim1=1)  # (batch_size, num_classes, model_param_count)
 
 
 def get_fisher(model, loader, num_classes):
 
+    # works only for models with CNN and linear layers only
+
     if torch.cuda.is_available():
         device = 'cuda'
     else:
         device = 'cpu'
-
-    f_fkac = FIM(
-        model=model,
-        loader=loader,
-        representation=PMatKFAC,
-        n_output=num_classes,
-        variant='classif_logits',
-        device=device
-    ).frobenius_norm().detach().item()
 
     f_diag = FIM(
         model=model,
@@ -110,26 +124,27 @@ def get_fisher(model, loader, num_classes):
         device=device
     ).frobenius_norm().detach().item()
 
+    f_fkac = FIM(
+        model=model,
+        loader=loader,
+        representation=PMatKFAC,
+        n_output=num_classes,
+        variant='classif_logits',
+        device=device
+    ).frobenius_norm().detach().item()
+
     return f_fkac, f_diag
 
 
-def get_eigenvalues(model, input, ntk_old, batch, num_classes=None):
+def get_eigenvalues(model, input, output, ntk_old, batch):
 
-    # Returns eigenvalues of ntk, ntk_tenas and ntk itself
-
-    output = model(input)
-    if num_classes is None:
-        num_classes = output.shape[-1]
     # ntk = A*A^T, fisher = A^T*A
-    A = torch.matmul(  # pretend there are only num_classes of classes
-        cholesky_covariance(output[:, :num_classes]),
-        jacobian_batch(model, input, num_classes=num_classes)
-    ).detach()
+    A = torch.matmul(cholesky_covariance(output), jacobian_batch_efficient(model, input)).detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
     # get eigenvalues
-    eig_ntk = torch.linalg.eigvalsh(ntk).detach().tolist()
-    eig_ntk_tenas = get_ntk_tenas(model, output).detach().tolist()
+    eig_ntk = torch.linalg.eigvalsh(ntk).detach()
+    eig_ntk_tenas = get_ntk_tenas(model, output).detach()
     ntk_new = ((ntk_old * batch + ntk) / (batch + 1)).detach()
 
     return eig_ntk, eig_ntk_tenas, ntk_new

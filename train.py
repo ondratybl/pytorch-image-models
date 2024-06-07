@@ -40,6 +40,10 @@ from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
 
+from fisher import get_eigenvalues
+from nngeometry.metrics import FIM
+from nngeometry.object import PMatDiag
+
 try:
     from apex import amp
     from apex.parallel import DistributedDataParallel as ApexDDP
@@ -397,7 +401,7 @@ group.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
                    help='longer description of the run, like a -m commit message in git')
 group.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
                    help='tags of the run')
-group.add_argument('--num-watch', default=4096, type=int, metavar='NAME',
+group.add_argument('--num-fisher', default=100, type=int, metavar='NAME',
                    help='number of samples to be watched')
 
 
@@ -678,7 +682,6 @@ def main():
             num_samples=args.val_num_samples,
         )
 
-        # subset samples from dataset_watch
         if args.random_target:
             import random
             random.seed(42)
@@ -777,7 +780,7 @@ def main():
 
         import random
         random.seed(42)
-        loader_watch = create_loader(
+        loader_fisher = create_loader(
             dataset_train,
             input_size=data_config['input_size'],
             batch_size=args.validation_batch_size or args.batch_size,
@@ -791,7 +794,8 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_train.reader.samples)), k=args.num_watch))
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_train.reader.samples)),
+                                                                               k=args.num_fisher))
         )
 
     # setup loss function
@@ -900,6 +904,16 @@ def main():
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
+            if (args.log_wandb and has_wandb) and utils.is_primary(args):
+                validate_fisher(
+                    model,
+                    loader_fisher,
+                    args,
+                    epoch,
+                    device=device,
+                    amp_autocast=amp_autocast,
+                )
+
             train_metrics = train_one_epoch(
                 epoch,
                 model,
@@ -921,15 +935,6 @@ def main():
                 if utils.is_primary(args):
                     _logger.info("Distributing BatchNorm running means and vars")
                 utils.distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
-
-            if (args.log_wandb and has_wandb) and utils.is_primary(args):
-                validate_watch(
-                    model,
-                    loader_watch,
-                    args,
-                    device=device,
-                    amp_autocast=amp_autocast,
-                )
 
             if loader_eval is not None:
                 eval_metrics = validate(
@@ -1167,41 +1172,65 @@ def train_one_epoch(
 
     return OrderedDict([('loss', losses_m.avg), ('top1', accuracies_m.avg)])
 
-def validate_watch(
+
+def validate_fisher(
         model,
         loader,
         args,
+        epoch,
         device=torch.device('cuda'),
         amp_autocast=suppress,
 ):
 
     model.eval()
-    with torch.no_grad():
-        watch_log = wandb.Table(columns=['hash', 'target', 'pred'])
-        for input, target in loader:
+    ntk = torch.ones(model.num_classes, model.num_classes)
+    import time
+    start_time = time.time()
+    for batch, data in enumerate(loader):
 
-            if not args.prefetcher:
-                input = input.to(device)
-                target = target.to(device)
-            if args.channels_last:
-                input = input.contiguous(memory_format=torch.channels_last)
+        input, _ = data
 
-            with amp_autocast():
-                output = model(input)
-                if isinstance(output, (tuple, list)):
-                    output = output[0]
+        if not args.prefetcher:
+            input = input.to(device)
+        if args.channels_last:
+            input = input.contiguous(memory_format=torch.channels_last)
 
-            if target.dim() == 2:
-                target = torch.argmax(target, dim=1)
+        with amp_autocast():
+            output = model(input)
+            if isinstance(output, (tuple, list)):
+                output = output[0]
 
-            for l1, l2, l3 in zip(
-                    torch.mean(input, dim=(1, 2, 3)),
-                    target,
-                    torch.argmax(output, dim=1)
-            ):
-                watch_log.add_data(l1.item(), l2.item(), l3.item())
+        eig_ntk_batch, eig_tenas_batch, ntk = get_eigenvalues(model, input, output, ntk, batch)  # per batch ntk & tenas
 
-        wandb.log({'watch_log': watch_log})
+        wandb.log({
+            'ntk_batch_max': eig_ntk_batch.max().item(), 'ntk_batch_sum': eig_ntk_batch.sum().item(),
+            'ntk_batch_sum2': torch.square(eig_ntk_batch).sum().item(), 'ntk_batch_std': eig_ntk_batch.std().item(),
+            'tenas_batch_max': eig_tenas_batch.max().item(), 'tenas_batch_sum': eig_tenas_batch.sum().item(),
+            'tenas_batch_sum2': torch.square(eig_tenas_batch).sum().item(), 'tenas_batch_std': eig_tenas_batch.std().item(),
+            'batch': batch, 'epoch': epoch
+        })
+    eig_ntk = torch.linalg.eigvalsh(ntk)  # per population ntk
+    print('Batches: ')
+    print(time.time() - start_time)
+    start_time = time.time()
+    fisher_norm = FIM(
+        model=model,
+        loader=loader,
+        representation=PMatDiag,
+        n_output=model.num_classes,
+        variant='classif_logits',
+        device=device
+    ).frobenius_norm().detach().item()
+
+    print('Fisher: ')
+    print(time.time() - start_time)
+
+    wandb.log({
+        'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(),
+        'ntk_sum2': torch.square(eig_ntk).sum().item(), 'ntk_std': eig_ntk.std().item(),
+        'fisher_norm': fisher_norm, 'epoch': epoch
+    })
+
 
 def validate(
         model,
