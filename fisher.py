@@ -142,6 +142,15 @@ def get_fisher(model, loader, num_classes):
 
 def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress):
 
+    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
+                                                                             model.named_buffers()}
+
+    with amp_autocast():
+        def compute_prediction(sample):
+            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
+
+        print(vmap(compute_prediction)(input).dtype)
+
     # output.dtype == torch.float16
     # input.dtype == torch.float32
 
