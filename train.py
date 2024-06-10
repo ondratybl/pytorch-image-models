@@ -1214,6 +1214,7 @@ def validate_fisher(
         eig_ntk = torch.linalg.eigvalsh(ntk)  # per population ntk
         print('Batches: ')
         print(time.time() - start_time)
+        """
         start_time = time.time()
         fisher_norm = FIM(
             model=model,
@@ -1226,11 +1227,12 @@ def validate_fisher(
 
         print('Fisher: ')
         print(time.time() - start_time)
+        """
 
     wandb.log({
         'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(),
         'ntk_sum2': torch.square(eig_ntk).sum().item(), 'ntk_std': eig_ntk.std().item(),
-        'fisher_norm': fisher_norm, 'epoch': epoch
+        'epoch': epoch, #'fisher_norm': fisher_norm,
     })
 
 
