@@ -1218,7 +1218,7 @@ def validate_fisher(
         start_time = time.time()
         fisher_norm = FIM(
             model=model,
-            loader=loader,
+            loader=loader.loader,
             representation=PMatDiag,
             n_output=model.num_classes,
             variant='classif_logits',
