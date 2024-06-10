@@ -142,26 +142,16 @@ def get_fisher(model, loader, num_classes):
 
 def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress):
 
-    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
-                                                                             model.named_buffers()}
-
-    with amp_autocast():
-        def compute_prediction(sample):
-            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
-
-        print(vmap(compute_prediction)(input).dtype)
-
     # output.dtype == torch.float16
     # input.dtype == torch.float32
 
-    print(f'Input dtype: {input.dtype}')
+    output = output.float()
 
     # ntk = A*A^T, fisher = A^T*A
     cholesky = cholesky_covariance(output)  # torch.float16
     print(f'Cholesky dtype: {cholesky.dtype}')
 
-    with amp_autocast():
-        jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
+    jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
     print(f'Jacobian dtype: {jacobian.dtype}')
 
     A = torch.matmul(cholesky, jacobian).detach()
