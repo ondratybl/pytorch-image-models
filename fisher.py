@@ -70,14 +70,18 @@ def gradient_batch(model, input):
 
 def jacobian_batch_efficient(model, input):
 
-    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
-                                                                             model.named_buffers()}
+    model.zero_grad()
+
+    params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
+    buffers = {k: v.detach() for k, v in model.named_buffers()}
 
     def jacobian_sample(sample):
-        def compute_prediction(params):
+        def compute_prediction(params_grad):
+            params = params_grad.copy()
+            params.update({k: v.detach() for k, v in model.named_parameters() if k not in params_grad.keys()})
             return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
 
-        return jacrev(compute_prediction)(params)
+        return jacrev(compute_prediction)(params_grad)
 
     jacobian_dict = vmap(jacobian_sample)(input)
     ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
@@ -140,7 +144,7 @@ def get_fisher(model, loader, num_classes):
     return f_fkac, f_diag
 
 
-def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress):
+def get_eigenvalues(model, input, output, ntk_old, batch):
 
     # output.dtype == torch.float16
     # input.dtype == torch.float32
@@ -156,7 +160,6 @@ def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress)
 
     # get eigenvalues
     eig_ntk = torch.linalg.eigvalsh(ntk).detach()
-    eig_ntk_tenas = get_ntk_tenas(model, output).detach()
     ntk_new = ((ntk_old * batch + ntk) / (batch + 1)).detach()
 
-    return eig_ntk, eig_ntk_tenas, ntk_new
+    return eig_ntk, ntk_new
