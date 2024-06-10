@@ -82,7 +82,7 @@ def jacobian_batch_efficient(model, input):
     jacobian_dict = vmap(jacobian_sample)(input)
     ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
 
-    return ret
+    return ret.detach()
 
 
 def jacobian_batch(model, input, num_classes=1000):
@@ -142,24 +142,14 @@ def get_fisher(model, loader, num_classes):
 
 def get_eigenvalues(model, input, output, ntk_old, batch, amp_autocast=suppress):
 
-    # ntk = A*A^T, fisher = A^T*A
-    cholesky = cholesky_covariance(output)  # torch.float16
-
     print(f'Input dtype: {input.dtype}')
 
-    params, buffers = {k: v.detach() for k, v in model.named_parameters()}, {k: v.detach() for k, v in
-                                                                             model.named_buffers()}
-    sample = input[0]
+    # ntk = A*A^T, fisher = A^T*A
+    cholesky = cholesky_covariance(output)  # torch.float16
+    jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
-    def compute_prediction(params):
-        return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
-
-    with amp_autocast():
-        print(f'Input dtype: {vmap(compute_prediction)(params)}')
-
-    jacobian = jacobian_batch_efficient(model, input.half())  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
-
-    print(f'Jacobian dtype: {cholesky.dtype}')
+    print(f'Cholesky dtype: {cholesky.dtype}')
+    print(f'Jacobian dtype: {jacobian.dtype}')
 
     A = torch.matmul(cholesky, jacobian).detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
