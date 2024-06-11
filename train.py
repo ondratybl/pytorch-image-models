@@ -784,7 +784,7 @@ def main():
         loader_fisher = create_loader(
             dataset_train,
             input_size=data_config['input_size'],
-            batch_size=args.validation_batch_size or args.batch_size,
+            batch_size=1,
             is_training=False,
             interpolation=data_config['interpolation'],
             mean=data_config['mean'],
