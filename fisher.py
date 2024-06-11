@@ -159,7 +159,11 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
     # get eigenvalues
-    eig_ntk = torch.linalg.eigvalsh(ntk).detach()
+    try:
+        eig_ntk = torch.linalg.eigvalsh(ntk).detach()  # per population ntk
+    except Exception as e:
+        print(f"Per population NTK failed in batch {batch}: {e}")
+        eig_ntk = torch.full((1000,), float('nan'), device=output.device)
     ntk_new = ((ntk_old * batch + ntk) / (batch + 1)).detach()
 
     return eig_ntk, ntk_new

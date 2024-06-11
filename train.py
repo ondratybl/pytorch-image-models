@@ -1207,7 +1207,11 @@ def validate_fisher(
         ntk_batch_sum2_list.append(torch.square(eig_ntk_batch).sum().item())
         ntk_batch_std_list.append(eig_ntk_batch.std().item())
 
-    eig_ntk = torch.linalg.eigvalsh(ntk).detach()  # per population ntk
+    try:
+        eig_ntk = torch.linalg.eigvalsh(ntk).detach()  # per population ntk
+    except Exception as e:
+        print(f"Per population NTK failed in batch {batch}: {e}")
+        eig_ntk = torch.full((1000,), float('nan'), device=device)
 
     # TENAS
     output = []
