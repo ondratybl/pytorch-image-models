@@ -795,7 +795,7 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_train.reader.samples)),
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_eval.reader.samples)),
                                                                                k=args.num_fisher))
         )
 
