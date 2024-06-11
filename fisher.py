@@ -72,8 +72,8 @@ def jacobian_batch_efficient(model, input):
 
     model.zero_grad()
 
-    params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
-    #params_grad = {k: v.detach() for k, v in model.named_parameters()}
+    #params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
+    params_grad = {k: v.detach() for k, v in model.named_parameters()}
     buffers = {k: v.detach() for k, v in model.named_buffers()}
 
     def jacobian_sample(sample):
