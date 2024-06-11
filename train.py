@@ -782,7 +782,7 @@ def main():
         import random
         random.seed(42)
         loader_fisher = create_loader(
-            dataset_train,
+            dataset_eval,
             input_size=data_config['input_size'],
             batch_size=args.validation_batch_size or args.batch_size,
             is_training=False,
