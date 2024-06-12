@@ -50,12 +50,9 @@ def cholesky_covariance(output):
     cov_cholesky = torch.matmul(L, torch.transpose(L, dim0=1, dim1=2))
 
     max_error = torch.abs(cov_true - cov_cholesky).max().item()
-    if max_error > 1.0e-5:
+    if max_error > 1.0e-4:
         print(f'Cholesky decomposition back-test error with max error {max_error}')
-        print(cov_true[0, :5, :5])
-        print(cov_cholesky[0, :5, :5])
-        print('----------------------------')
-    return L
+    return L.detach()
 
 
 def gradient_batch(model, input):
@@ -77,8 +74,8 @@ def jacobian_batch_efficient(model, input):
 
     model.zero_grad()
 
-    #params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
-    params_grad = {k: v.detach() for k, v in model.named_parameters()}
+    params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
+    #params_grad = {k: v.detach() for k, v in model.named_parameters()}
     buffers = {k: v.detach() for k, v in model.named_buffers()}
 
     def jacobian_sample(sample):

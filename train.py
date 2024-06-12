@@ -782,7 +782,7 @@ def main():
         import random
         random.seed(42)
         loader_fisher = create_loader(
-            dataset_train,
+            dataset_eval,
             input_size=data_config['input_size'],
             batch_size=1,
             is_training=False,
@@ -795,7 +795,7 @@ def main():
             pin_memory=args.pin_mem,
             device=device,
             use_prefetcher=args.prefetcher,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_train.reader.samples)),
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(random.sample(range(len(dataset_eval.reader.samples)),
                                                                                k=args.num_fisher))
         )
 
@@ -1213,6 +1213,10 @@ def validate_fisher(
         print(f"Per population NTK failed in batch {batch}: {e}")
         eig_ntk = torch.full((1000,), float('nan'), device=device)
 
+    ntk_fro, ntk_nuc, ntk_sing = torch.linalg.matrix_norm(ntk, ord='fro').item(), torch.linalg.matrix_norm(ntk,
+                                                                                                           ord='nuc').item(), torch.linalg.matrix_norm(
+        ntk, ord=2).item()
+
     # TENAS
     output = []
     for input, _ in list(loader)[:1000]:
@@ -1240,6 +1244,7 @@ def validate_fisher(
         'ntk_batch_sum2_m': median(ntk_batch_sum2_list), 'ntk_batch_sum2_std': stdev(ntk_batch_sum2_list),
         'ntk_batch_std_m': median(ntk_batch_std_list), 'ntk_batch_std_std': stdev(ntk_batch_std_list),
         'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(), 'ntk_sum2': torch.square(eig_ntk).sum().item(), 'ntk_std': eig_ntk.std().item(),
+        'ntk_fro': ntk_fro, 'ntk_nuc': ntk_nuc, 'ntk_sing': ntk_sing,
         'tenas_max': eig_tenas.max().item(), 'tenas_sum': eig_tenas.sum().item(), 'tenas_sum2': torch.square(eig_tenas).sum().item(), 'tenas_std': eig_tenas.std().item(),
         'epoch': epoch
     })
