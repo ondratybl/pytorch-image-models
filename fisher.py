@@ -24,7 +24,7 @@ def get_ntk_tenas(model, output):
 def cholesky_covariance(output):
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
-    alpha = 0.00001  # label smoothing for stability
+    alpha = 0.001  # label smoothing for stability
 
     alpha = torch.tensor(alpha, dtype=torch.float16, device=output.device)
 
@@ -48,8 +48,13 @@ def cholesky_covariance(output):
     cov_true = torch.diag_embed(prob) - torch.matmul(torch.unsqueeze(prob, dim=2),
                                                      torch.transpose(torch.unsqueeze(prob, dim=2), dim0=1, dim1=2))
     cov_cholesky = torch.matmul(L, torch.transpose(L, dim0=1, dim1=2))
-    if torch.abs(cov_true - cov_cholesky).max().item() > 1.0e-5:
-        print('Cholesky decomposition back-test error.')
+
+    max_error = torch.abs(cov_true - cov_cholesky).max().item()
+    if max_error > 1.0e-5:
+        print(f'Cholesky decomposition back-test error with max error {max_error}')
+        print(cov_true[0, :5, :5])
+        print(cov_cholesky[0, :5, :5])
+        print('----------------------------')
     return L
 
 
