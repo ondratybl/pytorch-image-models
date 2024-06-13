@@ -82,7 +82,7 @@ def jacobian_batch_efficient(model, input):
         def compute_prediction(params_grad):
             params = params_grad.copy()
             params.update({k: v.detach() for k, v in model.named_parameters() if k not in params_grad.keys()})
-            return torch.softmax(functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0), dim=1)
+            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
 
         return jacrev(compute_prediction)(params_grad)
 
@@ -155,11 +155,11 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     output = output.float()
 
     # ntk = A*A^T, fisher = A^T*A
-    #cholesky = cholesky_covariance(output)  # torch.float16
+    cholesky = cholesky_covariance(output)  # torch.float16
     jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
-    #A = torch.matmul(cholesky, jacobian).detach()
-    ntk = torch.mean(torch.matmul(jacobian, torch.transpose(jacobian, dim0=1, dim1=2)), dim=0).detach()
+    A = torch.matmul(cholesky, jacobian).detach()
+    ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
     # get eigenvalues
     try:
