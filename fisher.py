@@ -158,7 +158,8 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     cholesky = cholesky_covariance(output)  # torch.float16
     jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
-    A = torch.matmul(cholesky, jacobian).detach()
+    #A = torch.matmul(cholesky, jacobian).detach()
+    A = jacobian.detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
     # get eigenvalues
