@@ -1213,6 +1213,8 @@ def validate_fisher(
         print(f"Per population NTK failed in batch {batch}: {e}")
         eig_ntk = torch.full((1000,), float('nan'), device=device)
 
+    ntk = ntk.float()/1000000
+
     ntk_fro, ntk_nuc, ntk_sing = torch.linalg.matrix_norm(ntk, ord='fro').item(), torch.linalg.matrix_norm(ntk,
                                                                                                            ord='nuc').item(), torch.linalg.matrix_norm(
         ntk, ord=2).item()
