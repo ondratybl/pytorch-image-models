@@ -161,6 +161,7 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     A = torch.matmul(cholesky, jacobian).detach()
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0)
 
+    """
     cholesky_nan = torch.isnan(cholesky).sum().item()
     jacobian_nan = torch.isnan(jacobian).sum().item()
     ntk_nan = torch.isnan(ntk).sum().item()
@@ -173,6 +174,8 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
 
     if ntk_nan > 0:
         print(f'Jacobian n. of nan: {ntk_nan}')
+        
+    """
 
     # get eigenvalues
     try:
