@@ -21,7 +21,8 @@ __all__ = ['VGG']
 
 
 cfgs: Dict[str, List[Union[str, int]]] = {
-    'vgg11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'vgg11': [8, 'M', 16, 'M', 32, 'M', 64, 64, 'M', 64, 64, 'M'],
+    #'vgg11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'vgg13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'vgg16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
     'vgg19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
@@ -81,7 +82,7 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         assert output_stride == 32
         self.num_classes = num_classes
-        self.num_features = 4096
+        self.num_features = 612
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.use_norm = norm_layer is not None
