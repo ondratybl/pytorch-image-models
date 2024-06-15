@@ -1222,7 +1222,7 @@ def validate_fisher(
                                                                                                            ord='nuc').item(), torch.linalg.matrix_norm(
         ntk, ord=2).item()
 
-    np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.numpy(), delimiter=',')
+    np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.cpu().numpy(), delimiter=',')
 
     # TENAS
     output = []
