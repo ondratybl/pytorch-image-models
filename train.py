@@ -44,6 +44,7 @@ from fisher import get_eigenvalues, get_ntk_tenas
 from statistics import median, stdev
 from nngeometry.metrics import FIM
 from nngeometry.object import PMatDiag
+import numpy as np
 
 try:
     from apex import amp
@@ -911,6 +912,7 @@ def main():
                     loader_fisher,
                     args,
                     epoch,
+                    output_dir,
                     device=device,
                     amp_autocast=amp_autocast,
                 )
@@ -1179,6 +1181,7 @@ def validate_fisher(
         loader,
         args,
         epoch,
+        output_dir,
         device=torch.device('cuda'),
         amp_autocast=suppress,
 ):
@@ -1218,6 +1221,8 @@ def validate_fisher(
     ntk_fro, ntk_nuc, ntk_sing = torch.linalg.matrix_norm(ntk, ord='fro').item(), torch.linalg.matrix_norm(ntk,
                                                                                                            ord='nuc').item(), torch.linalg.matrix_norm(
         ntk, ord=2).item()
+
+    np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.numpy(), delimiter=',')
 
     # TENAS
     output = []
