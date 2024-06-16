@@ -40,7 +40,7 @@ from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
 
-from fisher import get_eigenvalues, get_ntk_tenas_new
+from fisher import get_eigenvalues, get_ntk_tenas
 from statistics import median, stdev
 import numpy as np
 
@@ -1224,11 +1224,11 @@ def validate_fisher(
 
     # TENAS
     output = []
-    for input, _ in list(loader)[:1000]:
+    for input, _ in list(loader)[:100]:
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
     model.zero_grad()
-    eig_tenas = get_ntk_tenas_new(model, output).detach()
+    eig_tenas = get_ntk_tenas(model, output).detach()
 
     # FIM
     """
