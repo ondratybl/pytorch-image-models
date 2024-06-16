@@ -1201,7 +1201,7 @@ def validate_fisher(
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
-        eig_ntk_batch, ntk = get_eigenvalues(model, input, output, ntk, batch)  # per batch ntk
+        eig_ntk_batch, ntk = get_eigenvalues(model, input, output, ntk, batch, output_dir)  # per batch ntk
 
         ntk_batch_max_list.append(eig_ntk_batch.max().item())
         ntk_batch_sum_list.append(eig_ntk_batch.sum().item())
