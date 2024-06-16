@@ -80,7 +80,7 @@ def cholesky_covariance(output, output_dir):
         import numpy as np
         import os
         print(f'Cholesky n. of nan: {torch.isnan(L).sum().item()}')
-        np.savetxt(os.path.join(output_dir, f'ntk_epoch{torch.randint(low=0, high=10000, size=(1,)).item()}.csv'), output.cpu().numpy(), delimiter=',')
+        np.savetxt(os.path.join(output_dir, f'ntk_epoch{torch.randint(low=0, high=10000, size=(1,)).item()}.csv'), output.detach().cpu().numpy(), delimiter=',')
     return L.detach()
 
 
