@@ -52,6 +52,10 @@ def cholesky_covariance(output):
     max_error = torch.abs(cov_true - cov_cholesky).max().item()
     if max_error > 1.0e-4:
         print(f'Cholesky decomposition back-test error with max error {max_error}')
+
+    if torch.isnan(L).sum().item() > 0:
+        import numpy as np
+        np.savetxt(f'nan_output{torch.randint(low=0, high=10000, size=(1,)).item()}.csv', output.cpu().numpy(), delimiter=',')
     return L.detach()
 
 
@@ -160,6 +164,16 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
 
     #A = torch.matmul(cholesky, jacobian).detach()
     ntk = torch.mean(torch.matmul(jacobian, torch.transpose(jacobian, dim0=1, dim1=2)), dim=0).detach()
+
+    cholesky_nan = torch.isnan(cholesky).sum().item()
+    ntk_nan = torch.isnan(ntk).sum().item()
+
+    if cholesky_nan > 0:
+        print(f'Cholesky n. of nan: {cholesky_nan}')
+
+    if ntk_nan > 0:
+        print(f'Jacobian n. of nan: {ntk_nan}')
+
 
     # get eigenvalues
     try:
