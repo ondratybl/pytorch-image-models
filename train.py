@@ -1250,7 +1250,7 @@ def validate_fisher(
         'ntk_batch_std_m': median(ntk_batch_std_list), 'ntk_batch_std_std': stdev(ntk_batch_std_list),
         'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(), 'ntk_sum2': torch.square(eig_ntk).sum().item(), 'ntk_std': eig_ntk.std().item(),
         'ntk_fro': ntk_fro, 'ntk_nuc': ntk_nuc, 'ntk_sing': ntk_sing,
-        'tenas_max': eig_tenas.max().item(), 'tenas_sum': eig_tenas.sum().item(), 'tenas_sum2': torch.square(eig_tenas).sum().item(), 'tenas_std': eig_tenas.std().item(),
+        'tenas_max': eig_tenas.max().item(), 'tenas_sum': eig_tenas.sum().item(), 'tenas_sum2': torch.square(eig_tenas).sum().item(), 'tenas_std': eig_tenas.std().item(), 'tenas_cond': eig_tenas.max().item()/eig_tenas.min().item(),
         'epoch': epoch
     })
 
