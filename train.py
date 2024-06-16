@@ -40,10 +40,8 @@ from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
 
-from fisher import get_eigenvalues, get_ntk_tenas
+from fisher import get_eigenvalues, get_ntk_tenas_new
 from statistics import median, stdev
-from nngeometry.metrics import FIM
-from nngeometry.object import PMatDiag
 import numpy as np
 
 try:
@@ -1230,7 +1228,7 @@ def validate_fisher(
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
     model.zero_grad()
-    eig_tenas = get_ntk_tenas(model, output).detach()
+    eig_tenas = get_ntk_tenas_new(model, output).detach()
 
     # FIM
     """

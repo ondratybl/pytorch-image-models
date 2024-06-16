@@ -21,6 +21,29 @@ def get_ntk_tenas(model, output):
     return torch.linalg.eigvalsh(ntk)
 
 
+def get_ntk_tenas_new(model, output):
+    # efficient way for get_ntk_tenas avoiding allocation in torch.stack
+    grads = torch.empty(len(output), sum(p.numel() for n, p in model.named_parameters() if 'weight' in n),
+                        device=output.device)
+    for idx in range(len(output)):
+        model.zero_grad()  # Clear previous gradients
+        output[idx].backward(torch.ones_like(output[idx]), retain_graph=True)
+
+        grad_list = []
+        for name, param in model.named_parameters():
+            if 'weight' in name and param.grad is not None:
+                grad_list.append(param.grad.view(-1))
+
+        if grad_list:
+            grads[idx] = torch.cat(grad_list, dim=0)
+        else:
+            raise ValueError("No gradients found for any parameters.")
+
+    # Compute NTK and its eigenvalues
+    ntk = torch.mm(grads, grads.t())
+    return torch.linalg.eigvalsh(ntk)
+
+
 def cholesky_covariance(output):
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
@@ -55,6 +78,7 @@ def cholesky_covariance(output):
 
     if torch.isnan(L).sum().item() > 0:
         import numpy as np
+        print(f'Cholesky n. of nan: {torch.isnan(L).sum().item()}')
         np.savetxt(f'nan_output{torch.randint(low=0, high=10000, size=(1,)).item()}.csv', output.cpu().numpy(), delimiter=',')
     return L.detach()
 
@@ -159,21 +183,16 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     output = output.float()
 
     # ntk = A*A^T, fisher = A^T*A
-    #cholesky = cholesky_covariance(output)  # torch.float16
+    cholesky = cholesky_covariance(output)  # torch.float16
     jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
-    #A = torch.matmul(cholesky, jacobian).detach()
-    ntk = torch.mean(torch.matmul(jacobian, torch.transpose(jacobian, dim0=1, dim1=2)), dim=0).detach()
+    A = torch.matmul(cholesky, jacobian).detach()
+    ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0).detach()
 
-    cholesky_nan = torch.isnan(cholesky).sum().item()
     ntk_nan = torch.isnan(ntk).sum().item()
 
-    if cholesky_nan > 0:
-        print(f'Cholesky n. of nan: {cholesky_nan}')
-
     if ntk_nan > 0:
-        print(f'Jacobian n. of nan: {ntk_nan}')
-
+        print(f'NTK n. of nan: {ntk_nan}')
 
     # get eigenvalues
     try:
