@@ -44,7 +44,7 @@ def get_ntk_tenas_new(model, output):
     return torch.linalg.eigvalsh(ntk)
 
 
-def cholesky_covariance(output):
+def cholesky_covariance(output, output_dir):
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
     alpha = 0.000001  # label smoothing for stability
@@ -78,8 +78,9 @@ def cholesky_covariance(output):
 
     if torch.isnan(L).sum().item() > 0:
         import numpy as np
+        import os
         print(f'Cholesky n. of nan: {torch.isnan(L).sum().item()}')
-        np.savetxt(f'nan_output{torch.randint(low=0, high=10000, size=(1,)).item()}.csv', output.cpu().numpy(), delimiter=',')
+        np.savetxt(os.path.join(output_dir, f'ntk_epoch{torch.randint(low=0, high=10000, size=(1,)).item()}.csv'), output.cpu().numpy(), delimiter=',')
     return L.detach()
 
 
@@ -175,7 +176,7 @@ def get_fisher(model, loader, num_classes):
     return f_fkac, f_diag
 
 
-def get_eigenvalues(model, input, output, ntk_old, batch):
+def get_eigenvalues(model, input, output, ntk_old, batch, output_dir):
 
     # output.dtype == torch.float16
     # input.dtype == torch.float32
@@ -183,7 +184,7 @@ def get_eigenvalues(model, input, output, ntk_old, batch):
     output = output.float()
 
     # ntk = A*A^T, fisher = A^T*A
-    cholesky = cholesky_covariance(output)  # torch.float16
+    cholesky = cholesky_covariance(output, output_dir)  # torch.float16
     jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
     A = torch.matmul(cholesky, jacobian).detach()
