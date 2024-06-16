@@ -52,6 +52,10 @@ def cholesky_covariance(output):
     max_error = torch.abs(cov_true - cov_cholesky).max().item()
     if max_error > 1.0e-4:
         print(f'Cholesky decomposition back-test error with max error {max_error}')
+
+    if torch.isnan(L).sum().item() > 0:
+        import numpy as np
+        np.savetxt(f'nan_output{torch.randint(low=0, high=10000, size=(1,)).item()}.csv', output.cpu().numpy(), delimiter=',')
     return L.detach()
 
 
