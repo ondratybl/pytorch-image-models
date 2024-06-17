@@ -1208,15 +1208,30 @@ def validate_fisher(
             np.savetxt(os.path.join(output_dir, f'output_epoch{epoch}_batch{batch}.csv'), output.detach().cpu().numpy(),
                        delimiter=',')
 
+        if batch % 99 == 0:
+            print(f'Epoch {epoch} batch {batch}')
+            print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+            print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+            print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+
     ntk = ntk.float() / 1000000
     np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.cpu().numpy(), delimiter=',')
 
+    print(f'Epoch {epoch} before TENAS')
+    print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+    print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+    print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
     # TENAS
     output = []
     for input, _ in list(loader)[:32]:
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
     eig_tenas = get_ntk_tenas_new(model, output).detach()
+
+    print(f'Epoch {epoch} after TENAS')
+    print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+    print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+    print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
 
     # LOG
     wandb.log({
