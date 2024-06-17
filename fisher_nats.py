@@ -132,19 +132,22 @@ if __name__ == '__main__':
 
     # Iterate models and seeds
     for index in range(1, args.n_models):
-        for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
+        try:
+            for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
 
-            # get FIM and TENAS
-            model = get_model(api, args.dataset_name, index, seed, args.epochs_trained).to(device)
-            info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
+                # get FIM and TENAS
+                model = get_model(api, args.dataset_name, index, seed, args.epochs_trained).to(device)
+                info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
 
-            # get train statistics
-            info_per = api.get_more_info(index, args.dataset_name, hp=args.epochs_trained, is_random=seed)
-            info_cost = api.get_cost_info(index, args.dataset_name, hp=args.epochs_trained)
+                # get train statistics
+                info_per = api.get_more_info(index, args.dataset_name, hp=args.epochs_trained, is_random=seed)
+                info_cost = api.get_cost_info(index, args.dataset_name, hp=args.epochs_trained)
 
-            # log
-            combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs_trained}
-            combined_dict.update(info_ntk)
-            combined_dict.update(info_per)
-            combined_dict.update(info_cost)
-            wandb.log(combined_dict)
+                # log
+                combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs_trained}
+                combined_dict.update(info_ntk)
+                combined_dict.update(info_per)
+                combined_dict.update(info_cost)
+                wandb.log(combined_dict)
+        except AssertionError as e:
+            print(f"Model not found: {e}")
