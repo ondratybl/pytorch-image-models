@@ -1213,6 +1213,7 @@ def validate_fisher(
             print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
             print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
             print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+            torch.cuda.reset_peak_memory_stats()
 
     ntk = ntk.float() / 1000000
     np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.cpu().numpy(), delimiter=',')
@@ -1221,6 +1222,8 @@ def validate_fisher(
     print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
     print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
     print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+    torch.cuda.reset_peak_memory_stats()
+
     # TENAS
     output = []
     for input, _ in list(loader)[:32]:
@@ -1232,6 +1235,7 @@ def validate_fisher(
     print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
     print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
     print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+    torch.cuda.reset_peak_memory_stats()
 
     # LOG
     wandb.log({
