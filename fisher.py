@@ -105,14 +105,13 @@ def jacobian_batch_efficient(model, input):
     model.zero_grad()
 
     params_grad = {k: v.detach() for k, v in model.named_parameters() if ('weight' in k and 'bn' not in k)}
-    #params_grad = {k: v.detach() for k, v in model.named_parameters()}
     buffers = {k: v.detach() for k, v in model.named_buffers()}
 
     def jacobian_sample(sample):
         def compute_prediction(params_grad):
             params = params_grad.copy()
             params.update({k: v.detach() for k, v in model.named_parameters() if k not in params_grad.keys()})
-            return torch.softmax(functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0), dim=0)
+            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
 
         return jacrev(compute_prediction)(params_grad)
 
