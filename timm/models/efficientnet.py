@@ -1556,7 +1556,7 @@ def efficientnet_b0(pretrained=False, **kwargs) -> EfficientNet:
     """ EfficientNet-B0 """
     # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
     model = _gen_efficientnet(
-        'efficientnet_b0', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+        'efficientnet_b0', channel_multiplier=0.72, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
     return model
 
 
