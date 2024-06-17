@@ -1210,19 +1210,21 @@ def validate_fisher(
 
         if batch % 99 == 0:
             print(f'Epoch {epoch} batch {batch}')
-            print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
-            print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
-            print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-            torch.cuda.reset_peak_memory_stats()
+            if torch.cuda.is_available():
+                print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+                print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+                print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+                torch.cuda.reset_peak_memory_stats()
 
     ntk = ntk.float() / 1000000
     np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.cpu().numpy(), delimiter=',')
 
     print(f'Epoch {epoch} before TENAS')
-    print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
-    print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
-    print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-    torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+        torch.cuda.reset_peak_memory_stats()
 
     # TENAS
     output = []
@@ -1232,10 +1234,11 @@ def validate_fisher(
     eig_tenas = get_ntk_tenas_new(model, output).detach()
 
     print(f'Epoch {epoch} after TENAS')
-    print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
-    print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
-    print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-    torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+        torch.cuda.reset_peak_memory_stats()
 
     # LOG
     wandb.log({
