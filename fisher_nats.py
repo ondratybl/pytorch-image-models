@@ -32,7 +32,7 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
     model.eval()
 
     # NTK
-    ntk = torch.zeros(120, 120)
+    ntk = torch.zeros(120, 120, device=device)
     for batch, data in enumerate(loader):
 
         if batch >= num_fisher:
