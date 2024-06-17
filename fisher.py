@@ -53,11 +53,7 @@ def get_ntk_tenas_new(model, output):
 def cholesky_covariance(output):
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
-    alpha = 0.000001  # label smoothing for stability
-
-    alpha = torch.tensor(alpha, dtype=torch.float16, device=output.device)
-
-    prob = torch.nn.functional.softmax(output, dim=1) * (1 - alpha) + alpha / output.shape[1]
+    prob = torch.nn.functional.softmax(output/1.5, dim=1)  # we divide (i.e. apply temperature) to get it smoother
     q = torch.ones_like(prob) - torch.cumsum(prob, dim=1)
     q[:, -1] = torch.zeros_like(q[:, -1])
     q_shift = torch.roll(q, shifts=1, dims=1)
