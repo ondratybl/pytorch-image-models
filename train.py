@@ -40,8 +40,7 @@ from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
 
-from fisher import get_eigenvalues, get_ntk_tenas
-from statistics import median, stdev
+from fisher import get_eigenvalues, get_ntk_tenas_new
 import numpy as np
 
 try:
@@ -1185,8 +1184,9 @@ def validate_fisher(
 ):
 
     model.eval()
-    ntk = torch.ones(model.num_classes, model.num_classes, device=device)
-    ntk_batch_max_list, ntk_batch_sum_list, ntk_batch_sum2_list, ntk_batch_std_list = [], [], [], []
+
+    # NTK
+    ntk = torch.zeros(model.num_classes, model.num_classes, device=device)
     for batch, data in enumerate(loader):
 
         input, _ = data
@@ -1201,56 +1201,33 @@ def validate_fisher(
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
-        eig_ntk_batch, ntk = get_eigenvalues(model, input, output, ntk, batch, output_dir)  # per batch ntk
+        ntk = get_eigenvalues(model, input, output, ntk, batch)
 
-        ntk_batch_max_list.append(eig_ntk_batch.max().item())
-        ntk_batch_sum_list.append(eig_ntk_batch.sum().item())
-        ntk_batch_sum2_list.append(torch.square(eig_ntk_batch).sum().item())
-        ntk_batch_std_list.append(eig_ntk_batch.std().item())
+        if torch.isnan(ntk).sum().item() > 0:
+            print(f'NTK contains NaN. Output is stored.')
+            np.savetxt(os.path.join(output_dir, f'output_epoch{epoch}_batch{batch}.csv'), output.detach().cpu().numpy(),
+                       delimiter=',')
 
-    try:
-        eig_ntk = torch.linalg.eigvalsh(ntk).detach()  # per population ntk
-    except Exception as e:
-        print(f"Per population NTK failed in batch {batch}: {e}")
-        eig_ntk = torch.full((1000,), float('nan'), device=device)
-
-    ntk = ntk.float()/1000000
-
-    ntk_fro, ntk_nuc, ntk_sing = torch.linalg.matrix_norm(ntk, ord='fro').item(), torch.linalg.matrix_norm(ntk,
-                                                                                                           ord='nuc').item(), torch.linalg.matrix_norm(
-        ntk, ord=2).item()
-
+    ntk = ntk.float() / 1000000
     np.savetxt(os.path.join(output_dir, f'ntk_epoch{epoch}.csv'), ntk.cpu().numpy(), delimiter=',')
 
     # TENAS
     output = []
-    for input, _ in list(loader)[:100]:
+    for input, _ in list(loader)[:256]:
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
-    model.zero_grad()
-    eig_tenas = get_ntk_tenas(model, output).detach()
-
-    # FIM
-    """
-    fisher_norm = FIM(
-        model=model,
-        loader=loader.loader,
-        representation=PMatDiag,
-        n_output=model.num_classes,
-        variant='classif_logits',
-        device=device
-    ).frobenius_norm().detach().item()
-    """
+    eig_tenas = get_ntk_tenas_new(model, output).detach()
 
     # LOG
     wandb.log({
-        'ntk_batch_max_m': median(ntk_batch_max_list), 'ntk_batch_max_std': stdev(ntk_batch_max_list),
-        'ntk_batch_sum_m': median(ntk_batch_sum_list), 'ntk_batch_sum_std': stdev(ntk_batch_sum_list),
-        'ntk_batch_sum2_m': median(ntk_batch_sum2_list), 'ntk_batch_sum2_std': stdev(ntk_batch_sum2_list),
-        'ntk_batch_std_m': median(ntk_batch_std_list), 'ntk_batch_std_std': stdev(ntk_batch_std_list),
-        'ntk_max': eig_ntk.max().item(), 'ntk_sum': eig_ntk.sum().item(), 'ntk_sum2': torch.square(eig_ntk).sum().item(), 'ntk_std': eig_ntk.std().item(),
-        'ntk_fro': ntk_fro, 'ntk_nuc': ntk_nuc, 'ntk_sing': ntk_sing,
-        'tenas_max': eig_tenas.max().item(), 'tenas_sum': eig_tenas.sum().item(), 'tenas_sum2': torch.square(eig_tenas).sum().item(), 'tenas_std': eig_tenas.std().item(), 'tenas_cond': eig_tenas.max().item()/eig_tenas.min().item(),
+        'ntk_fro': torch.linalg.matrix_norm(ntk, ord='fro').item(),
+        'ntk_nuc': torch.linalg.matrix_norm(ntk, ord='nuc').item(),
+        'ntk_sing': torch.linalg.matrix_norm(ntk, ord=2).item(),
+        'tenas_max': eig_tenas.max().item(),
+        'tenas_sum': eig_tenas.sum().item(),
+        'tenas_sum2': torch.square(eig_tenas).sum().item(),
+        'tenas_std': eig_tenas.std().item(),
+        'tenas_cond': eig_tenas.max().item()/eig_tenas.min().item(),
         'epoch': epoch
     })
 

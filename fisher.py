@@ -3,6 +3,7 @@ from torch.func import functional_call, vmap, grad, jacrev
 from nngeometry.metrics import FIM
 from nngeometry.object import PMatKFAC, PMatDiag
 from contextlib import suppress
+import gc
 
 
 def get_ntk_tenas(model, output):
@@ -41,10 +42,15 @@ def get_ntk_tenas_new(model, output):
 
     # Compute NTK and its eigenvalues
     ntk = torch.mm(grads, grads.t())
+
+    del grads, grad_list
+    gc.collect()
+    torch.cuda.empty_cache()
+
     return torch.linalg.eigvalsh(ntk)
 
 
-def cholesky_covariance(output, output_dir):
+def cholesky_covariance(output):
 
     # Cholesky decomposition of covariance matrix (notation from Theorem 1 in https://sci-hub.se/10.2307/2345957)
     alpha = 0.000001  # label smoothing for stability
@@ -76,11 +82,6 @@ def cholesky_covariance(output, output_dir):
     if max_error > 1.0e-4:
         print(f'Cholesky decomposition back-test error with max error {max_error}')
 
-    if torch.isnan(L).sum().item() > 0:
-        import numpy as np
-        import os
-        print(f'Cholesky n. of nan: {torch.isnan(L).sum().item()}')
-        np.savetxt(os.path.join(output_dir, f'ntk_epoch{torch.randint(low=0, high=10000, size=(1,)).item()}.csv'), output.detach().cpu().numpy(), delimiter=',')
     return L.detach()
 
 
@@ -176,7 +177,7 @@ def get_fisher(model, loader, num_classes):
     return f_fkac, f_diag
 
 
-def get_eigenvalues(model, input, output, ntk_old, batch, output_dir):
+def get_eigenvalues(model, input, output, ntk_old, batch):
 
     # output.dtype == torch.float16
     # input.dtype == torch.float32
@@ -184,23 +185,22 @@ def get_eigenvalues(model, input, output, ntk_old, batch, output_dir):
     output = output.float()
 
     # ntk = A*A^T, fisher = A^T*A
-    cholesky = cholesky_covariance(output, output_dir)  # torch.float16
+    cholesky = cholesky_covariance(output)  # torch.float16
     jacobian = jacobian_batch_efficient(model, input)  # RuntimeError: Input type (torch.cuda.HalfTensor) and weight type (torch.cuda.FloatTensor) should be the same
 
     A = torch.matmul(cholesky, jacobian).detach()
+
+    del jacobian, cholesky
+    gc.collect()
+    torch.cuda.empty_cache()
+
     ntk = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0).detach()
 
-    ntk_nan = torch.isnan(ntk).sum().item()
+    del A
+    gc.collect()
+    torch.cuda.empty_cache()
 
-    if ntk_nan > 0:
-        print(f'NTK n. of nan: {ntk_nan}')
+    if torch.isnan(ntk).sum().item() > 0:
+        print(f'NTK n. of nan: {torch.isnan(ntk).sum().item()}')
 
-    # get eigenvalues
-    try:
-        eig_ntk = torch.linalg.eigvalsh(ntk).detach()  # per population ntk
-    except Exception as e:
-        print(f"Per population NTK failed in batch {batch}: {e}")
-        eig_ntk = torch.full((1000,), float('nan'), device=output.device)
-    ntk_new = ((ntk_old * batch + ntk) / (batch + 1)).detach()
-
-    return eig_ntk, ntk_new
+    return ((ntk_old * batch + ntk) / (batch + 1)).detach()
