@@ -10,6 +10,7 @@ import wandb
 
 
 def get_model(api, dataset, index, seed, hp):
+
     model = get_cell_based_tiny_net(api.get_net_config(index, dataset))
     params = {seed: api.get_net_param(index, dataset, seed=seed, hp=hp)}  # seed=None returns all seeds
     model.load_state_dict(next(iter(params.values())))
@@ -26,8 +27,8 @@ def get_model(api, dataset, index, seed, hp):
     return ModelWrapper(model)
 
 
-def compute(api, dataset, index, seed, hp, loader, num_fisher, num_tenas):
-    model = get_model(api, dataset, index, seed, hp)
+def compute(model, index, seed, loader, num_fisher, num_tenas, device):
+
     model.eval()
 
     # NTK
@@ -38,6 +39,7 @@ def compute(api, dataset, index, seed, hp, loader, num_fisher, num_tenas):
             break
 
         input, _ = data
+        input = input.to(device)
         ntk = get_eigenvalues(model, input, model(input), ntk, batch)
 
         if batch % 100 == 0:
@@ -60,7 +62,8 @@ def compute(api, dataset, index, seed, hp, loader, num_fisher, num_tenas):
     # TENAS
     output = []
     for input, _ in list(loader)[:num_tenas]:
-        output.append(model(input)[1].squeeze(0))
+        input = input.to(device)
+        output.append(model(input).squeeze(0))
     output = torch.stack(output)
     eig_tenas = get_ntk_tenas_new(model, output).detach()
 
@@ -96,18 +99,19 @@ if __name__ == '__main__':
     parser.add_argument('--num-iterations', type=int, default=1, help='Number of iterations.')
     parser.add_argument('--use-train', action='store_true', help='Use train split, not test split.')
     parser.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
-                        help='Name of wandb experiment to be shown in the interface')
+                       help='Name of wandb experiment to be shown in the interface')
     parser.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
-                        help='Longer description of the run, like a -m commit message in git')
+                       help='Longer description of the run, like a -m commit message in git')
     parser.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
-                        help='tags of the run')
+                       help='tags of the run')
     parser.add_argument('--num-fisher', default=4096, type=int, metavar='NAME',
-                        help='Number of samples to be watched by FIM')
+                       help='Number of samples to be watched by FIM')
     parser.add_argument('--num-tenas', default=32, type=int, metavar='NAME',
-                        help='Number of samples to be watched by TENAS')
+                       help='Number of samples to be watched by TENAS')
 
     # Parse the arguments
     args = parser.parse_args()
+    args.dataset_name = args.dataset.split('/')[1]
 
     # wandb
     wandb.init(
@@ -118,30 +122,29 @@ if __name__ == '__main__':
         tags=[args.tags_wandb],
     )
 
+    # cuda
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     # API
-    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=1,
-                        shuffle=False)
+    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=1, shuffle=False)
     api = create(args.models, 'tss', fast_mode=True, verbose=True)
 
     # Iterate models and seeds
     for index in range(1, args.n_models):
-        try:
-            for seed in api.get_net_param(index, args.dataset, None, hp=args.epochs).keys():
-                # get FIM and TENAS
-                info_ntk = compute(api, args.dataset, index, seed, args.epochs, loader, args.num_fisher, args.num_tenas)
+        for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
 
-                # get train statistics
-                info_per = api.get_more_info(index, args.dataset, hp=args.epochs, is_random=seed)
-                info_cost = api.get_cost_info(index, args.dataset, hp=args.epochs)
+            # get FIM and TENAS
+            model = get_model(api, args.dataset_name, index, seed, args.epochs_trained).to(device)
+            info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
 
-                # log
-                combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs}
-                combined_dict.update(info_ntk)
-                combined_dict.update(info_per)
-                combined_dict.update(info_cost)
-                wandb.log(combined_dict)
+            # get train statistics
+            info_per = api.get_more_info(index, args.dataset_name, hp=args.epochs_trained, is_random=seed)
+            info_cost = api.get_cost_info(index, args.dataset_name, hp=args.epochs_trained)
 
-        except AssertionError as e:
-            print(f"Error: {e}")
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            # log
+            combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs_trained}
+            combined_dict.update(info_ntk)
+            combined_dict.update(info_per)
+            combined_dict.update(info_cost)
+            wandb.log(combined_dict)
