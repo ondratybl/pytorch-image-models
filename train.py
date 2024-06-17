@@ -1213,7 +1213,7 @@ def validate_fisher(
 
     # TENAS
     output = []
-    for input, _ in list(loader)[:256]:
+    for input, _ in list(loader)[:32]:
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
     eig_tenas = get_ntk_tenas_new(model, output).detach()
