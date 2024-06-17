@@ -131,7 +131,7 @@ if __name__ == '__main__':
     api = create(args.models, 'tss', fast_mode=True, verbose=True)
 
     # Iterate models and seeds
-    for index in range(1, args.n_models):
+    for index in range(args.n_models):
         try:
             for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
 
