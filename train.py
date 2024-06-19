@@ -1249,7 +1249,7 @@ def validate_fisher(
         'tenas_sum': eig_tenas.sum().item(),
         'tenas_sum2': torch.square(eig_tenas).sum().item(),
         'tenas_std': eig_tenas.std().item(),
-        'tenas_cond': eig_tenas.max().item()/eig_tenas.min().item(),
+        'tenas_cond': eig_tenas.max().item()/eig_tenas.min().item() if eig_tenas.min().item() > 0 else None,
         'epoch': epoch
     })
 

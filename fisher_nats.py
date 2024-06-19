@@ -95,7 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='Data/ImageNet16-120', help='Dataset path.')
     parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-full', help='Models path.')
     parser.add_argument('--epochs_trained', type=str, default='200', help='Number of training epochs.')
-    parser.add_argument('--n_models', type=int, default=100, help='Number of models to assess.')
+    parser.add_argument('--n_model_min', type=int, default=0, help='Model from.')
+    parser.add_argument('--n_model_max', type=int, default=10, help='Model to.')
     parser.add_argument('--num-iterations', type=int, default=1, help='Number of iterations.')
     parser.add_argument('--use-train', action='store_true', help='Use train split, not test split.')
     parser.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
@@ -131,7 +132,7 @@ if __name__ == '__main__':
     api = create(args.models, 'tss', fast_mode=True, verbose=True)
 
     # Iterate models and seeds
-    for index in range(args.n_models):
+    for index in range(args.n_model_min, args.n_model_max):
         try:
             for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
 
