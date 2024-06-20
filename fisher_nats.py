@@ -74,6 +74,10 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
         input = input.to(device)
         ntk = get_eigenvalues(model, input, model(input), ntk, batch)
 
+        if torch.isnan(ntk).sum().item() > 0:
+            print(f'NTK contains NaN. Output is stored.')
+            np.savetxt(f'output/output_{index}_{seed}_{batch}.csv', model(input).detach().cpu().numpy(), delimiter=',')
+
         if batch % 100 == 0:
             print(f'Index {index} seed {seed} batch {batch}')
             if torch.cuda.is_available():
