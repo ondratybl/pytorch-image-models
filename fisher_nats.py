@@ -20,13 +20,16 @@ def prepare_seed(rand_seed):
 
 
 def get_model(api, dataset, index, seed, hp, pretrained):
-
-    prepare_seed(seed)  # we call similarly as in https://github.com/D-X-Y/AutoDL-Projects/blob/main/xautodl/procedures/funcs_nasbench.py#L82
+    prepare_seed(
+        seed)  # we call similarly as in https://github.com/D-X-Y/AutoDL-Projects/blob/main/xautodl/procedures/funcs_nasbench.py#L82
     model = get_cell_based_tiny_net(api.get_net_config(index, dataset))
     if pretrained:  # weights overridden by pretrained ones
         params = {seed: api.get_net_param(index, dataset, seed=seed, hp=hp)}  # seed=None returns all seeds
         model.load_state_dict(next(iter(params.values())))
-
+        model.eval()
+    else:
+        model.train()
+        torch.func.replace_all_batch_norm_modules_(model)  # TODO: discuss with Lukas
 
     class ModelWrapper(torch.nn.Module):
         def __init__(self, original_model):
@@ -41,7 +44,6 @@ def get_model(api, dataset, index, seed, hp, pretrained):
 
 
 def get_condition_number(matrix):
-
     try:
         lambdas = torch.linalg.eigvalsh(matrix).detach()
     except torch._C._LinAlgError as e:
@@ -54,14 +56,12 @@ def get_condition_number(matrix):
             print(error_message)
 
     if lambdas.min().item() > 0:
-        return lambdas.max().item()/lambdas.min().item()
+        return lambdas.max().item() / lambdas.min().item()
     else:
         return None
 
 
 def compute(model, index, seed, loader, num_fisher, num_tenas, device):
-
-    model.eval()
 
     # NTK
     ntk = torch.zeros(120, 120, device=device)
@@ -127,7 +127,8 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
         'tenas_p_sum': eig_tenas_probs.sum().item(),
         'tenas_p_sum2': torch.square(eig_tenas_probs).sum().item(),
         'tenas_p_std': eig_tenas_probs.std().item(),
-        'tenas_p_cond': eig_tenas_probs.max().item() / (eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None,
+        'tenas_p_cond': eig_tenas_probs.max().item() / (
+            eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None,
 
         'params_total': sum(p.numel() for n, p in model.named_parameters()),
         'params_used': sum(p.numel() for n, p in model.named_parameters() if ('weight' in n and 'bn' not in n)),
@@ -139,24 +140,23 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FIM for NATS-bench', add_help=False)
     # Add arguments
     parser.add_argument('--dataset', type=str, default='Data/ImageNet16-120', help='Dataset path.')
-    parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-full', help='Models path.')
-    parser.add_argument('--pretrained', action='store_true', default=False,
-                       help='Start with pretrained version of specified network (if avail)')
+    parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-simple', help='Models path.')
+    parser.add_argument('--pretrained', action='store_true', help='Use pretrained weights.')
     parser.add_argument('--epochs_trained', type=str, default='200', help='Number of training epochs.')
     parser.add_argument('--n_model_min', type=int, default=0, help='Model from.')
     parser.add_argument('--n_model_max', type=int, default=10, help='Model to.')
     parser.add_argument('--num-iterations', type=int, default=1, help='Number of iterations.')
     parser.add_argument('--use-train', action='store_true', help='Use train split, not test split.')
     parser.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
-                       help='Name of wandb experiment to be shown in the interface')
+                        help='Name of wandb experiment to be shown in the interface')
     parser.add_argument('--notes-wandb', default='', type=str, metavar='NAME',
-                       help='Longer description of the run, like a -m commit message in git')
+                        help='Longer description of the run, like a -m commit message in git')
     parser.add_argument('--tags-wandb', default='default', type=str, metavar='NAME',
-                       help='tags of the run')
+                        help='tags of the run')
     parser.add_argument('--num-fisher', default=4096, type=int, metavar='NAME',
-                       help='Number of samples to be watched by FIM')
+                        help='Number of samples to be watched by FIM')
     parser.add_argument('--num-tenas', default=32, type=int, metavar='NAME',
-                       help='Number of samples to be watched by TENAS')
+                        help='Number of samples to be watched by TENAS')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -176,14 +176,14 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # API
-    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=1, shuffle=False)
+    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=1,
+                        shuffle=False)
     api = create(args.models, 'tss', fast_mode=True, verbose=True)
 
     # Iterate models and seeds
     for index in range(args.n_model_min, args.n_model_max):
         try:
             for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
-
                 # get FIM and TENAS
                 model = get_model(api, args.dataset_name, index, seed, args.epochs_trained, args.pretrained).to(device)
                 info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
