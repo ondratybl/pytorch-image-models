@@ -1884,7 +1884,11 @@ def vit_base_patch16_224(pretrained: bool = False, **kwargs) -> VisionTransforme
         num_heads = kwargs['num_heads']
     else:
         num_heads = 12
-    model_args = dict(patch_size=16, embed_dim=num_heads*64, depth=12, num_heads=num_heads)
+    if 'depth' in kwargs.keys():
+        depth = kwargs['depth']
+    else:
+        depth = 12
+    model_args = dict(patch_size=16, embed_dim=num_heads*64, depth=depth, num_heads=num_heads)
     model = _create_vision_transformer('vit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
