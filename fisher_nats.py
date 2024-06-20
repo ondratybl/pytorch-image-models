@@ -136,7 +136,7 @@ if __name__ == '__main__':
     # Add arguments
     parser.add_argument('--dataset', type=str, default='Data/ImageNet16-120', help='Dataset path.')
     parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-full', help='Models path.')
-    parser.add_argument('--pretrained', action='store_true', help='Use pretrained weights.')
+    parser.add_argument('--pretrained', action='store_true', default=False, help='Use pretrained weights.')
     parser.add_argument('--epochs_trained', type=str, default='200', help='Number of training epochs.')
     parser.add_argument('--n_model_min', type=int, default=0, help='Model from.')
     parser.add_argument('--n_model_max', type=int, default=10, help='Model to.')
