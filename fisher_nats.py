@@ -1,19 +1,32 @@
 from xautodl.datasets.DownsampledImageNet import ImageNet16
 from nats_bench import create
 from xautodl.models import get_cell_based_tiny_net
-from fisher import get_eigenvalues, get_ntk_tenas_new
+from fisher import get_eigenvalues, get_ntk_tenas_new, get_ntk_tenas_new_probs
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch
 import argparse
 import wandb
+import random
+import numpy as np
 
 
-def get_model(api, dataset, index, seed, hp):
+def prepare_seed(rand_seed):
+    random.seed(rand_seed)
+    np.random.seed(rand_seed)
+    torch.manual_seed(rand_seed)
+    torch.cuda.manual_seed(rand_seed)
+    torch.cuda.manual_seed_all(rand_seed)
 
+
+def get_model(api, dataset, index, seed, hp, pretrained):
+
+    prepare_seed(seed)  # we call similarly as in https://github.com/D-X-Y/AutoDL-Projects/blob/main/xautodl/procedures/funcs_nasbench.py#L82
     model = get_cell_based_tiny_net(api.get_net_config(index, dataset))
-    params = {seed: api.get_net_param(index, dataset, seed=seed, hp=hp)}  # seed=None returns all seeds
-    model.load_state_dict(next(iter(params.values())))
+    if pretrained:  # weights overridden by pretrained ones
+        params = {seed: api.get_net_param(index, dataset, seed=seed, hp=hp)}  # seed=None returns all seeds
+        model.load_state_dict(next(iter(params.values())))
+
 
     class ModelWrapper(torch.nn.Module):
         def __init__(self, original_model):
@@ -25,6 +38,25 @@ def get_model(api, dataset, index, seed, hp):
             return output[1]  # Return the second element of the output tuple
 
     return ModelWrapper(model)
+
+
+def get_condition_number(matrix):
+
+    try:
+        lambdas = torch.linalg.eigvalsh(matrix).detach()
+    except torch._C._LinAlgError as e:
+        error_message = str(e)
+        if "torch.linalg.eigvalsh: The algorithm failed to converge because the input matrix is ill-conditioned or has too many repeated eigenvalues" in error_message:
+            print(
+                "Error in eigenvalue calculation: The input matrix is ill-conditioned or has too many repeated eigenvalues.")
+        else:
+            print("Unexpected torch._C._LinAlgError occurred:")
+            print(error_message)
+
+    if lambdas.min().item() > 0:
+        return lambdas.max().item()/lambdas.min().item()
+    else:
+        return None
 
 
 def compute(model, index, seed, loader, num_fisher, num_tenas, device):
@@ -66,6 +98,7 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
         output.append(model(input).squeeze(0))
     output = torch.stack(output)
     eig_tenas = get_ntk_tenas_new(model, output).detach()
+    eig_tenas_probs = get_ntk_tenas_new_probs(model, output).detach()
 
     print(f'Index {index} seed {seed} after TENAS')
     if torch.cuda.is_available():
@@ -78,11 +111,20 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
         'ntk_fro': torch.linalg.matrix_norm(ntk, ord='fro').item(),
         'ntk_nuc': torch.linalg.matrix_norm(ntk, ord='nuc').item(),
         'ntk_sing': torch.linalg.matrix_norm(ntk, ord=2).item(),
+        'ntk_cond': get_condition_number(ntk),
+
         'tenas_max': eig_tenas.max().item(),
         'tenas_sum': eig_tenas.sum().item(),
         'tenas_sum2': torch.square(eig_tenas).sum().item(),
         'tenas_std': eig_tenas.std().item(),
-        'tenas_cond': eig_tenas.max().item() / (eig_tenas.min().item()+1e-10),
+        'tenas_cond': eig_tenas.max().item() / (eig_tenas.min().item()) if eig_tenas.min().item() > 0 else None,
+
+        'tenas_p_max': eig_tenas_probs.max().item(),
+        'tenas_p_sum': eig_tenas_probs.sum().item(),
+        'tenas_p_sum2': torch.square(eig_tenas_probs).sum().item(),
+        'tenas_p_std': eig_tenas_probs.std().item(),
+        'tenas_p_cond': eig_tenas_probs.max().item() / (eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None,
+
         'params_total': sum(p.numel() for n, p in model.named_parameters()),
         'params_used': sum(p.numel() for n, p in model.named_parameters() if ('weight' in n and 'bn' not in n)),
     }
@@ -94,6 +136,7 @@ if __name__ == '__main__':
     # Add arguments
     parser.add_argument('--dataset', type=str, default='Data/ImageNet16-120', help='Dataset path.')
     parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-full', help='Models path.')
+    parser.add_argument('--pretrained', action='store_true', help='Use pretrained weights.')
     parser.add_argument('--epochs_trained', type=str, default='200', help='Number of training epochs.')
     parser.add_argument('--n_model_min', type=int, default=0, help='Model from.')
     parser.add_argument('--n_model_max', type=int, default=10, help='Model to.')
@@ -137,7 +180,7 @@ if __name__ == '__main__':
             for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
 
                 # get FIM and TENAS
-                model = get_model(api, args.dataset_name, index, seed, args.epochs_trained).to(device)
+                model = get_model(api, args.dataset_name, index, seed, args.epochs_trained, args.pretrained).to(device)
                 info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
 
                 # get train statistics
