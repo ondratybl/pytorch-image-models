@@ -6,7 +6,7 @@ from contextlib import suppress
 import gc
 
 
-def get_ntk_tenas(model, output):
+def get_ntk_tenas_old(model, output):
     # based on https://github.com/VITA-Group/TENAS/blob/main/prune_tenas.py
     grads = []
     for _idx in range(len(output)):
@@ -23,7 +23,36 @@ def get_ntk_tenas(model, output):
 
 
 def get_ntk_tenas_new(model, output):
-    # efficient way for get_ntk_tenas avoiding allocation in torch.stack
+    # efficient way for based on https://github.com/VITA-Group/TENAS/blob/main/prune_tenas.py
+    grads = torch.empty(len(output), sum(p.numel() for n, p in model.named_parameters() if 'weight' in n),
+                        device=output.device)
+    for idx in range(len(output)):
+        model.zero_grad()  # Clear previous gradients
+        output[idx].backward(torch.ones_like(output[idx]), retain_graph=True)
+
+        grad_list = []
+        for name, param in model.named_parameters():
+            if 'weight' in name and param.grad is not None:
+                grad_list.append(param.grad.view(-1))
+
+        if grad_list:
+            grads[idx] = torch.cat(grad_list, dim=0)
+        else:
+            raise ValueError("No gradients found for any parameters.")
+
+    # Compute NTK and its eigenvalues
+    ntk = torch.mm(grads, grads.t())
+
+    del grads, grad_list
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return torch.linalg.eigvalsh(ntk)
+
+
+def get_ntk_tenas_new_probs(model, output):
+    # efficient way for based on https://github.com/VITA-Group/TENAS/blob/main/prune_tenas.py working with probs
+    output = torch.softmax(output, dim=1)
     grads = torch.empty(len(output), sum(p.numel() for n, p in model.named_parameters() if 'weight' in n),
                         device=output.device)
     for idx in range(len(output)):
