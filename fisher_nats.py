@@ -128,7 +128,7 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
         'tenas_p_sum2': torch.square(eig_tenas_probs).sum().item(),
         'tenas_p_std': eig_tenas_probs.std().item(),
         'tenas_p_cond': eig_tenas_probs.max().item() / (
-            eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None,
+            eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else -1,
 
         'params_total': sum(p.numel() for n, p in model.named_parameters()),
         'params_used': sum(p.numel() for n, p in model.named_parameters() if ('weight' in n and 'bn' not in n)),
