@@ -135,12 +135,45 @@ def compute(model, index, seed, loader, num_fisher, num_tenas, device):
     }
 
 
+def compute_tenas_across_batches(model, index, seed, loader, num_tenas, device):
+
+    # TENAS
+    tenas_cond_list = []
+    tenas_cond_probs_list = []
+    for input, _ in list(loader)[:num_tenas]:
+
+        input = input.to(device)
+        output = model(input)
+
+        eig_tenas = get_ntk_tenas_new(model, output).detach()
+        eig_tenas_probs = get_ntk_tenas_new_probs(model, output).detach()
+
+        tenas_cond_list.append(eig_tenas.max().item() / (eig_tenas.min().item()) if eig_tenas.min().item() > 0 else None)
+        tenas_cond_probs_list.append(eig_tenas_probs.max().item() / (eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None)
+
+    print(f'Index {index} seed {seed} after TENAS')
+    if torch.cuda.is_available():
+        print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
+        print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
+        torch.cuda.reset_peak_memory_stats()
+
+    return {
+        'tenas_cond_list': tenas_cond_list,
+        'tenas_cond_probs_list': tenas_cond_probs_list,
+
+        'params_total': sum(p.numel() for n, p in model.named_parameters()),
+        'params_used': sum(p.numel() for n, p in model.named_parameters() if ('weight' in n and 'bn' not in n)),
+    }
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='FIM for NATS-bench', add_help=False)
     # Add arguments
     parser.add_argument('--dataset', type=str, default='Data/ImageNet16-120', help='Dataset path.')
     parser.add_argument('--models', type=str, default='NATS-tss-v1_0-3ffb9-simple', help='Models path.')
+    parser.add_argument('--batch-size', type=int, default=1, help='Batch size (use > 1 only when computing TENAS across batches)')
     parser.add_argument('--pretrained', action='store_true', help='Use pretrained weights.')
     parser.add_argument('--epochs_trained', type=str, default='200', help='Number of training epochs.')
     parser.add_argument('--n_model_min', type=int, default=0, help='Model from.')
@@ -176,8 +209,9 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # API
-    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=1,
-                        shuffle=False)
+    prepare_seed(1)
+    loader = DataLoader(ImageNet16(args.dataset, False, transforms.Compose([transforms.ToTensor()]), 120), batch_size=args.batch_size,
+                        shuffle=True)
     api = create(args.models, 'tss', fast_mode=True, verbose=True)
 
     # Iterate models and seeds
@@ -186,8 +220,11 @@ if __name__ == '__main__':
             for seed in api.get_net_param(index, args.dataset_name, None, hp=args.epochs_trained).keys():
                 # get FIM and TENAS
                 model = get_model(api, args.dataset_name, index, seed, args.epochs_trained, args.pretrained).to(device)
-                info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
 
+                if args.batch_size == 1:  # compute TENAS on one batch of size args.num_tenas and NTK on all
+                    info_ntk = compute(model, index, seed, loader, args.num_fisher, args.num_tenas, device)
+                else:  # compute TENAS on args.num_tenas batches of size args.batch_size only
+                    info_ntk = compute_tenas_across_batches(model, index, seed, loader, args.num_tenas, device)
                 # get train statistics
                 info_per = api.get_more_info(index, args.dataset_name, hp=args.epochs_trained, is_random=seed)
                 info_cost = api.get_cost_info(index, args.dataset_name, hp=args.epochs_trained)
