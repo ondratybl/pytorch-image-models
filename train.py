@@ -902,7 +902,7 @@ def main():
                 dataset_train.set_epoch(epoch)
             elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
-
+            """
             if (args.log_wandb and has_wandb) and utils.is_primary(args):
                 validate_fisher(
                     model,
@@ -913,7 +913,7 @@ def main():
                     device=device,
                     amp_autocast=amp_autocast,
                 )
-
+            """
             train_metrics = train_one_epoch(
                 epoch,
                 model,
