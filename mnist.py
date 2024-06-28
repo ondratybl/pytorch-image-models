@@ -177,8 +177,8 @@ def compute(model, input):
         ntk_large_eig_p.min().item()) if ntk_large_eig_p.min().item() > 0 else None
 
     # TENAS
-    eig_tenas = get_ntk_tenas_new(model, model(input)).detach()
-    eig_tenas_probs = get_ntk_tenas_new_probs(model, model(input)).detach()
+    eig_tenas = torch.linalg.eigvalsh(get_ntk_tenas_new(model, model(input)).detach())
+    eig_tenas_probs = torch.linalg.eigvalsh(get_ntk_tenas_new_probs(model, model(input)).detach())
 
     return {
         'ntk_small_fro': torch.linalg.matrix_norm(ntk_small, ord='fro').item(),
