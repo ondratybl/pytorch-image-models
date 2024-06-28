@@ -185,27 +185,35 @@ def compute(model, input):
         'ntk_small_nuc': torch.linalg.matrix_norm(ntk_small, ord='nuc').item(),
         'ntk_small_sing': torch.linalg.matrix_norm(ntk_small, ord=2).item(),
         'ntk_small_cond': ntk_small_cond,
+        'ntk_small_coef' : ntk_small_eig.std() / (ntk_small_eig.mean()**2) if ntk_small_eig.mean() > 0 else None,
 
         'ntk_large_fro': torch.linalg.matrix_norm(ntk_large, ord='fro').item(),
         'ntk_large_nuc': torch.linalg.matrix_norm(ntk_large, ord='nuc').item(),
         'ntk_large_sing': torch.linalg.matrix_norm(ntk_large, ord=2).item(),
         'ntk_large_cond': ntk_large_cond,
+        'ntk_large_coef': ntk_large_eig.std() / (ntk_large_eig.mean() ** 2) if ntk_large_eig.mean() > 0 else None,
 
         'ntk_small_p_fro': torch.linalg.matrix_norm(ntk_small_p, ord='fro').item(),
         'ntk_small_p_nuc': torch.linalg.matrix_norm(ntk_small_p, ord='nuc').item(),
         'ntk_small_p_sing': torch.linalg.matrix_norm(ntk_small_p, ord=2).item(),
         'ntk_small_p_cond': ntk_small_cond_p,
+        'ntk_small_p_coef': ntk_small_eig_p.std() / (
+                    ntk_small_eig_p.mean() ** 2) if ntk_small_eig_p.mean() > 0 else None,
 
         'ntk_large_p_fro': torch.linalg.matrix_norm(ntk_large_p, ord='fro').item(),
         'ntk_large_p_nuc': torch.linalg.matrix_norm(ntk_large_p, ord='nuc').item(),
         'ntk_large_p_sing': torch.linalg.matrix_norm(ntk_large_p, ord=2).item(),
         'ntk_large_p_cond': ntk_large_cond_p,
+        'ntk_large_p_coef': ntk_large_eig_p.std() / (
+                    ntk_large_eig_p.mean() ** 2) if ntk_large_eig_p.mean() > 0 else None,
 
         'tenas_max': eig_tenas.max().item(),
         'tenas_sum': eig_tenas.sum().item(),
         'tenas_sum2': torch.square(eig_tenas).sum().item(),
         'tenas_std': eig_tenas.std().item(),
         'tenas_cond': eig_tenas.max().item() / (eig_tenas.min().item()) if eig_tenas.min().item() > 0 else None,
+        'tenas_coef': eig_tenas.std() / (
+                eig_tenas.mean() ** 2) if eig_tenas.mean() > 0 else None,
 
         'tenas_p_max': eig_tenas_probs.max().item(),
         'tenas_p_sum': eig_tenas_probs.sum().item(),
@@ -213,6 +221,8 @@ def compute(model, input):
         'tenas_p_std': eig_tenas_probs.std().item(),
         'tenas_p_cond': eig_tenas_probs.max().item() / (
             eig_tenas_probs.min().item()) if eig_tenas_probs.min().item() > 0 else None,
+        'tenas_p_coef': eig_tenas_probs.std() / (
+                eig_tenas_probs.mean() ** 2) if eig_tenas_probs.mean() > 0 else None,
     }
 
 
