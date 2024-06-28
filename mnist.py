@@ -13,11 +13,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-import sys
-import os
 import wandb
-import argparse
 import gc
+import argparse
 from fisher import get_ntk_tenas_new, get_ntk_tenas_new_probs, jacobian_batch_efficient, cholesky_covariance
 
 
@@ -57,17 +55,16 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         torch.manual_seed(seed)
         self.in_channels = in_channels
-        self.residual_conn = residual_conn
         self.conv1 = nn.Conv2d(1, in_channels, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(in_channels)
-        self.layer1 = self._make_layer(in_channels, num_blocks, residual_conn, stride=1)
+        self.layer1 = self._make_layer(in_channels, num_blocks, stride=1)
         self.fc = nn.Linear(in_channels, num_classes)
 
-    def _make_layer(self, out_channels, num_blocks, residual_conn, stride):
+    def _make_layer(self, out_channels, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(ResidualBlock(self.in_channels, out_channels, residual_conn, stride))
+            layers.append(ResidualBlock(self.in_channels, out_channels, stride))
             self.in_channels = out_channels
         return nn.Sequential(*layers)
 
@@ -87,22 +84,21 @@ def count_parameters(model):
 
 
 def train(model, config):
-
     iteration = 0
     for epoch in range(n_epochs):
         for batch_idx, (input_train, label_train) in enumerate(train_loader):
-    
+
             model.train()
             input_train, label_train = input_train.to(device), label_train.to(device)
-            
+
             optimizer.zero_grad()
             output_train = model(input_train)
             loss = criterion(output_train, label_train)
             loss.backward()
             optimizer.step()
-            
+
             if batch_idx % 100 == 0:
-                print(f'Epoch {epoch+1}/{n_epochs}, Batch {batch_idx}, Loss: {loss.item()}')
+                print(f'Epoch {epoch + 1}/{n_epochs}, Batch {batch_idx}, Loss: {loss.item()}')
 
                 model.eval()
                 correct = 0
@@ -116,19 +112,21 @@ def train(model, config):
                         _, predicted = torch.max(output_test.data, 1)
                         total += label_test.size(0)
                         correct += (predicted == label_test).sum().item()
-                
+
                 print(f'Accuracy of the model on the test set: {100 * correct / total}%')
 
                 results = config.copy()
                 results.update({'iteration': iteration, 'test_accuracy': correct / total, 'train_loss': loss.item()})
                 results.update(compute(model, input_train))
                 wandb.log(results)
-    
+
             iteration += 1
 
 
-def get_ntk(model, input):
+# In[8]:
 
+
+def get_ntk(model, input):
     cholesky = cholesky_covariance(model(input))
     jacobian = jacobian_batch_efficient(model, input)
 
@@ -143,7 +141,7 @@ def get_ntk(model, input):
 
     ntk_small_p = torch.mean(torch.matmul(A, torch.transpose(A, dim0=1, dim1=2)), dim=0).detach()
     ntk_large_p = torch.mean(torch.matmul(torch.transpose(A, dim0=1, dim1=2), A), dim=0).detach()
-    
+
     del A
     gc.collect()
     torch.cuda.empty_cache()
@@ -164,16 +162,19 @@ def get_ntk(model, input):
 
 
 def compute(model, input):
-
     # NTK
     ntk_small, ntk_large, ntk_small_p, ntk_large_p = get_ntk(model, input)
     ntk_small_eig, ntk_large_eig = torch.linalg.eigvalsh(ntk_small), torch.linalg.eigvalsh(ntk_large)
     ntk_small_eig_p, ntk_large_eig_p = torch.linalg.eigvalsh(ntk_small_p), torch.linalg.eigvalsh(ntk_large_p)
-    
-    ntk_small_cond = ntk_small_eig.max().item() / (ntk_small_eig.min().item()) if ntk_small_eig.min().item() > 0 else None
-    ntk_large_cond = ntk_large_eig.max().item() / (ntk_large_eig.min().item()) if ntk_large_eig.min().item() > 0 else None
-    ntk_small_cond_p = ntk_small_eig_p.max().item() / (ntk_small_eig_p.min().item()) if ntk_small_eig_p.min().item() > 0 else None
-    ntk_large_cond_p = ntk_large_eig_p.max().item() / (ntk_large_eig_p.min().item()) if ntk_large_eig_p.min().item() > 0 else None
+
+    ntk_small_cond = ntk_small_eig.max().item() / (
+        ntk_small_eig.min().item()) if ntk_small_eig.min().item() > 0 else None
+    ntk_large_cond = ntk_large_eig.max().item() / (
+        ntk_large_eig.min().item()) if ntk_large_eig.min().item() > 0 else None
+    ntk_small_cond_p = ntk_small_eig_p.max().item() / (
+        ntk_small_eig_p.min().item()) if ntk_small_eig_p.min().item() > 0 else None
+    ntk_large_cond_p = ntk_large_eig_p.max().item() / (
+        ntk_large_eig_p.min().item()) if ntk_large_eig_p.min().item() > 0 else None
 
     # TENAS
     eig_tenas = get_ntk_tenas_new(model, model(input)).detach()
@@ -218,7 +219,8 @@ def compute(model, input):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-    parser.add_argument('--seed', type=int, default=0, metavar='N', help='Random seed')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed.')
+    args = parser.parse_args()
 
     # wandb
     wandb.init(
@@ -248,35 +250,40 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
 
     n_epochs = 20
-    for seed in range(10):
-        for num_blocks in [1, 2]:
-            for in_channels in [2, 3, 4, 5]:
-                for initializer in (torch.nn.init.kaiming_uniform_, torch.nn.init.kaiming_normal_, nn.init.uniform_, torch.nn.init.normal_, torch.nn.init.ones_, torch.nn.init.xavier_normal_, torch.nn.init.xavier_uniform_):
-                    for residual_conn in [True, False]:
+    for num_blocks in [1, 2]:
+        for in_channels in [2, 3, 4, 5]:
+            for initializer in (
+            torch.nn.init.kaiming_uniform_, torch.nn.init.kaiming_normal_, nn.init.uniform_, torch.nn.init.normal_,
+            torch.nn.init.ones_, torch.nn.init.xavier_normal_, torch.nn.init.xavier_uniform_):
+                for residual_conn in [True, False]:
 
-                        # Create model
-                        model = ResNet(num_blocks=num_blocks, in_channels=in_channels, residual_conn=residual_conn, seed=seed).to(device)
+                    # Create model
+                    model = ResNet(num_blocks=num_blocks, in_channels=in_channels, residual_conn=residual_conn,
+                                   seed=args.seed).to(device)
 
-                        def custom_weights_init(m):
-                            if isinstance(m, (nn.Conv2d, nn.Linear)):  # TODO: add BatchNormalization
-                                initializer(m.weight)
-                                nn.init.zeros_(m.bias)
 
-                        model.apply(custom_weights_init)
-                        total_params, trainable_params = count_parameters(model)
-                        optimizer = optim.Adam(model.parameters(), lr=0.001)
-                        print('---------------------')
-                        print(f'Seed {seed}, num_blocks {num_blocks}, in_channels {in_channels}, initializer {str(initializer)}, residual_conn {residual_conn}')
-                        print(f'Total parameters: {total_params}')
-                        print(f'Trainable parameters: {trainable_params}')
-                        print('---------------------')
+                    def custom_weights_init(m):
+                        if isinstance(m, (nn.Conv2d, nn.Linear)):  # TODO: add BatchNormalization
+                            initializer(m.weight)
+                            nn.init.zeros_(m.bias)
 
-                        config = {
-                            'seed': seed,
-                            'num_blocks': num_blocks,
-                            'in_channels': in_channels,
-                            'initializer': str(initializer),
-                            'residual_conn': int(residual_conn),
-                            'params': trainable_params,
-                        }
-                        train(model, config)
+
+                    model.apply(custom_weights_init)
+                    total_params, trainable_params = count_parameters(model)
+                    optimizer = optim.Adam(model.parameters(), lr=0.001)
+                    print('---------------------')
+                    print(
+                        f'Seed {args.seed}, num_blocks {num_blocks}, in_channels {in_channels}, initializer {str(initializer)}, residual_conn {residual_conn}')
+                    print(f'Total parameters: {total_params}')
+                    print(f'Trainable parameters: {trainable_params}')
+                    print('---------------------')
+
+                    config = {
+                        'seed': args.seed,
+                        'num_blocks': num_blocks,
+                        'in_channels': in_channels,
+                        'initializer': str(initializer),
+                        'residual_conn': int(residual_conn),
+                        'params': trainable_params,
+                    }
+                    train(model, config)
