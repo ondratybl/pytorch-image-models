@@ -140,7 +140,10 @@ if __name__ == '__main__':
                 info_cost = api.get_cost_info(index, args.dataset_name, hp=args.epochs_trained)
 
                 # get compute & log
-                for batch, (input, _) in enumerate(loader)[: args.num_batches]:
+                for batch, (input, _) in enumerate(loader):
+
+                    if batch >= args.num_batches:
+                        break
 
                     input = input.to(device)
 
