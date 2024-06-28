@@ -44,7 +44,8 @@ def get_model(api, dataset, index, seed, hp, pretrained):
     return ModelWrapper(model)
 
 
-def get_condition_number(matrix):
+def get_matrix_stats(matrix, matrix_name):
+
     try:
         lambdas = torch.linalg.eigvalsh(matrix).detach()
     except torch._C._LinAlgError as e:
@@ -55,11 +56,13 @@ def get_condition_number(matrix):
         else:
             print("Unexpected torch._C._LinAlgError occurred:")
             print(error_message)
+        lambdas = torch.empty((2, ), device=matrix.get_device())
 
-    if lambdas.min().item() > 0:
-        return lambdas.max().item() / lambdas.min().item()
-    else:
-        return None
+    return {
+        matrix_name + '_cond': lambdas.max().item() / lambdas.min().item() if lambdas.min().item() > 0 else None,
+        matrix_name + '_max': lambdas.max().item(),
+        matrix_name + '_cef': lambdas.std() / lambdas.mean() if lambdas.mean() > 0 else None,
+    }
 
 
 def get_ntk(model, input):
@@ -80,7 +83,7 @@ def get_ntk(model, input):
     gc.collect()
     torch.cuda.empty_cache()
 
-    return torch.linalg.eigvalsh(ntk), torch.linalg.eigvalsh(ntk_p)
+    return ntk, ntk_p
 
 
 if __name__ == '__main__':
@@ -147,42 +150,16 @@ if __name__ == '__main__':
 
                     input = input.to(device)
 
-                    # tenas
-                    eig_tenas = get_ntk_tenas_new(model, model(input)).detach()
-                    eig_tenas_p = get_ntk_tenas_new_probs(model, model(input)).detach()
-
-                    info_tenas = {
-                        'tenas_cond': eig_tenas.max() / eig_tenas.min() if eig_tenas.min() > 0 else None,
-                        'tenas_max': eig_tenas.max(),
-                        'tenas_coef': eig_tenas.std() / eig_tenas.mean() if eig_tenas.mean() > 0 else None,
-
-                        'tenas_p_cond': eig_tenas_p.max() / eig_tenas_p.min() if eig_tenas_p.min() > 0 else None,
-                        'tenas_p_max': eig_tenas_p.max(),
-                        'tenas_p_coef': eig_tenas_p.std() / eig_tenas_p.mean() if eig_tenas_p.mean() > 0 else None,
-                    }
-
-                    # ntk
-                    eig_ntk, eig_ntk_p = get_ntk(model, input)
-
-                    if torch.isnan(eig_ntk).sum().item() > 0 or torch.isnan(eig_ntk_p).sum().item():
-                        print(f'NTK contains NaN. Output is stored.')
-                        np.savetxt(f'output/output_{index}_{seed}_{batch}.csv', model(input).detach().cpu().numpy(),
-                                   delimiter=',')
-
-                    info_ntk = {
-                        'ntk_cond': eig_ntk.max() / eig_ntk.min() if eig_ntk.min() > 0 else None,
-                        'ntk_max': eig_ntk.max(),
-                        'ntk_coef': eig_ntk.std() / eig_ntk.mean() if eig_ntk.mean() > 0 else None,
-
-                        'ntk_p_cond': eig_ntk_p.max() / eig_ntk_p.min() if eig_ntk_p.min() > 0 else None,
-                        'ntk_p_max': eig_ntk_p.max(),
-                        'ntk_p_coef': eig_ntk_p.std() / eig_ntk_p.mean() if eig_ntk_p.mean() > 0 else None,
-                    }
+                    # eigenvalues
+                    tenas, tenas_p = get_ntk_tenas_new(model, model(input)).detach(), get_ntk_tenas_new_probs(model, model(input)).detach()
+                    ntk, ntk_p = get_ntk(model, input)
 
                     # log
                     combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs_trained, 'batch': batch}
-                    combined_dict.update(info_ntk)
-                    combined_dict.update(info_tenas)
+                    combined_dict.update(get_matrix_stats(tenas, 'tenas'))
+                    combined_dict.update(get_matrix_stats(tenas_p, 'tenas_p'))
+                    combined_dict.update(get_matrix_stats(ntk, 'ntk'))
+                    combined_dict.update(get_matrix_stats(ntk_p, 'ntk_p'))
                     combined_dict.update(info_per)
                     combined_dict.update(info_cost)
                     wandb.log(combined_dict)
