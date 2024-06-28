@@ -230,13 +230,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('--seed', type=int, default=0, help='Random seed.')
+    parser.add_argument('--name-wandb', default='default_wandb_name', type=str, metavar='NAME',
+                       help='name of wandb experiment to be shown in the interface')
     args = parser.parse_args()
 
     # wandb
     wandb.init(
         project=None,
         config=None,
-        name="MNIST",
+        name=args.name_wandb,
         tags=["MNIST"],
     )
 
