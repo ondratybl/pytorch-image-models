@@ -18,6 +18,7 @@ import os
 import wandb
 import argparse
 import gc
+from fisher import get_ntk_tenas_new, get_ntk_tenas_new_probs, jacobian_batch_efficient, cholesky_covariance
 
 
 class ResidualBlock(nn.Module):
@@ -218,11 +219,6 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('--seed', type=int, default=0, metavar='N', help='Random seed')
-
-    # Add the parent directory to the system path
-    parent_dir = os.path.abspath(os.path.join(os.getcwd(), '..'))
-    sys.path.insert(0, parent_dir)
-    from fisher import get_ntk_tenas_new, get_ntk_tenas_new_probs, jacobian_batch_efficient, cholesky_covariance
 
     # wandb
     wandb.init(
