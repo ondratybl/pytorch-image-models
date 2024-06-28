@@ -47,7 +47,7 @@ def get_ntk_tenas_new(model, output):
     gc.collect()
     torch.cuda.empty_cache()
 
-    return torch.linalg.eigvalsh(ntk)
+    return ntk
 
 
 def get_ntk_tenas_new_probs(model, output):
@@ -76,7 +76,7 @@ def get_ntk_tenas_new_probs(model, output):
     gc.collect()
     torch.cuda.empty_cache()
 
-    return torch.linalg.eigvalsh(ntk)
+    return ntk
 
 
 def cholesky_covariance(output):
