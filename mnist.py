@@ -262,10 +262,10 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
 
     n_epochs = 20
-    for num_blocks in [1]:  # [1, 2]
-        for in_channels in [5]:  # [2, 3, 4, 5]:
+    for num_blocks in [2]:  # [1, 2]
+        for in_channels in [2, 3, 4, 5]:  # [2, 3, 4, 5]:
             for initializer in (
-            #torch.nn.init.kaiming_uniform_, torch.nn.init.kaiming_normal_, nn.init.uniform_, torch.nn.init.normal_,
+            torch.nn.init.kaiming_uniform_, torch.nn.init.kaiming_normal_, nn.init.uniform_, torch.nn.init.normal_,
             torch.nn.init.ones_, torch.nn.init.xavier_normal_, torch.nn.init.xavier_uniform_):
                 for residual_conn in [True, False]:
 
