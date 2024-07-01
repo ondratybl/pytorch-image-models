@@ -44,7 +44,7 @@ def get_model(api, dataset, index, seed, hp, pretrained):
     return ModelWrapper(model)
 
 
-def get_matrix_stats(matrix, matrix_name):
+def get_matrix_stats(matrix, matrix_name, ret_all=False):
 
     try:
         lambdas = torch.linalg.eigvalsh(matrix).detach()
@@ -58,11 +58,14 @@ def get_matrix_stats(matrix, matrix_name):
             print(error_message)
         lambdas = torch.empty((2, ), device=matrix.get_device())
 
-    return {
-        matrix_name + '_cond': lambdas.max().item() / lambdas.min().item() if lambdas.min().item() > 0 else None,
-        matrix_name + '_max': lambdas.max().item(),
-        matrix_name + '_cef': lambdas.std() / lambdas.mean() if lambdas.mean() > 0 else None,
-    }
+    if ret_all:
+        return {matrix_name + '_lambdas': lambdas}
+    else:
+        return {
+            matrix_name + '_cond': lambdas.max().item() / lambdas.min().item() if lambdas.min().item() > 0 else None,
+            matrix_name + '_max': lambdas.max().item(),
+            matrix_name + '_cef': lambdas.std() / lambdas.mean() if lambdas.mean() > 0 else None,
+        }
 
 
 def get_ntk(model, input):

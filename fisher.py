@@ -147,6 +147,32 @@ def jacobian_batch_efficient(model, input):
     return ret.detach()
 
 
+def jacobian_batch_efficient_subsample(model, input, param_idx):
+    model.zero_grad()
+
+    params_grad = {k: v.flatten()[idx:idx+1].detach() for (k, v), idx in zip(model.named_parameters(), param_idx)}
+    buffers = {k: v.detach() for k, v in model.named_buffers()}
+
+    def jacobian_sample(sample):
+        def compute_prediction(params_grad_tmp):
+            params = {k: v.detach() for k, v in model.named_parameters()}
+            for (k, v), idx in zip(params_grad_tmp.items(), param_idx):
+                param_shape = params[k].shape
+                param = params[k].flatten()
+                param[idx:idx+1] = v
+                params[k] = param.reshape(param_shape)
+
+            return functional_call(model, (params, buffers), (sample.unsqueeze(0),)).squeeze(0)
+
+        return jacrev(compute_prediction)(params_grad)
+
+    jacobian_dict = vmap(jacobian_sample)(input)
+
+    ret = torch.cat([torch.flatten(v, start_dim=2, end_dim=-1) for v in jacobian_dict.values()], dim=2)
+
+    return ret.detach()
+
+
 def jacobian_batch(model, input, num_classes=1000):
     import time
     start_time = time.time()
