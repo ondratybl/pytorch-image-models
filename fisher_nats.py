@@ -159,10 +159,10 @@ if __name__ == '__main__':
 
                     # log
                     combined_dict = {'index': index, 'seed': seed, 'hp': args.epochs_trained, 'batch': batch}
-                    combined_dict.update(get_matrix_stats(tenas, 'tenas'))
-                    combined_dict.update(get_matrix_stats(tenas_p, 'tenas_p'))
-                    combined_dict.update(get_matrix_stats(ntk, 'ntk'))
-                    combined_dict.update(get_matrix_stats(ntk_p, 'ntk_p'))
+                    combined_dict.update(get_matrix_stats(tenas, 'tenas', ret_all=True))
+                    #combined_dict.update(get_matrix_stats(tenas_p, 'tenas_p', ret_all=True))
+                    combined_dict.update(get_matrix_stats(ntk, 'ntk', ret_all=True))
+                    #combined_dict.update(get_matrix_stats(ntk_p, 'ntk_p', ret_all=True))
                     combined_dict.update(info_per)
                     combined_dict.update(info_cost)
                     wandb.log(combined_dict)
